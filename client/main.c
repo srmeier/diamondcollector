@@ -43,7 +43,54 @@ int main(int argc, char *argv[]) {
 	netInit();
 	gfxInit();
 	
+	/* === */
+
 	running = SDL_TRUE;
+
+	// NOTE: build login packet (temp)
+	if(argc<3) {
+		fprintf(stderr, "Error: incorrect number of arguements.\n");
+
+		gfxQuit();
+		netQuit();
+		libQuit();
+
+		return -1;
+	}
+
+	UDPpacket packet = {};
+
+	uint32_t unSize = strlen(argv[1]);
+	uint32_t pwSize = strlen(argv[2]);
+
+	packet.maxlen = 1+4+unSize+4+pwSize;
+	packet.data = (uint8_t *)malloc(packet.maxlen);
+
+	uint8_t offset = 0;
+
+	memset(packet.data+offset, 0x01, 1);
+	offset += 1;
+	memcpy(packet.data+offset, &unSize, 4);
+	offset += 4;
+	memcpy(packet.data+offset, argv[1], unSize);
+	offset += unSize;
+	memcpy(packet.data+offset, &pwSize, 4);
+	offset += 4;
+	memcpy(packet.data+offset, argv[2], pwSize);
+	offset += pwSize;
+
+	packet.len = offset;
+
+	// NOTE: SDLNet_UDP_Send returns the number of people the packet was sent to
+	int numSent = SDLNet_UDP_Send(clientFD, serverChannel, &packet);
+	if(!numSent) {
+		// NOTE: this might not be a huge error
+		fprintf(stderr, "SDLNet_UDP_Send: %s\n", SDLNet_GetError());
+	}
+
+	free(packet.data);
+
+	/* === */
 
 	while(running) {
 		SDL_RenderClear(renderer);
@@ -57,7 +104,6 @@ int main(int argc, char *argv[]) {
 				case SDL_QUIT: {
 					running = SDL_FALSE;
 				} break;
-				
 				case SDL_KEYDOWN: {
 					switch(event.key.keysym.sym) {
 						case SDLK_ESCAPE:  break;
@@ -69,7 +115,6 @@ int main(int argc, char *argv[]) {
 						case SDLK_LALT:  break;
 					}
 				} break;
-
 				case SDL_KEYUP: {
 					switch(event.key.keysym.sym) {
 						case SDLK_UP:  break;
@@ -85,7 +130,7 @@ int main(int argc, char *argv[]) {
 
 		/* === */
 
-		
+
 
 		/* === */
 
@@ -95,6 +140,12 @@ int main(int argc, char *argv[]) {
 		SDL_RenderPresent(renderer);
 		SDL_DestroyTexture(tex);
 	}
+
+	/* === */
+
+
+
+	/* === */
 
 	gfxQuit();
 	netQuit();
@@ -180,6 +231,19 @@ void gfxInit(void) {
 		SDL_RENDERER_PRESENTVSYNC
 	);
 
+	// NOTE: if Vsync didn't work then exit
+	SDL_RendererInfo info;
+	SDL_GetRendererInfo(renderer, &info);
+	if(!(info.flags & SDL_RENDERER_PRESENTVSYNC)) {
+		fprintf(stderr, "SDL_CreateRenderer: failed to set Vsync.\n");
+
+		netQuit();
+		libQuit();
+
+		exit(-1);
+	}
+
+	// NOTE: user screen for holding pixel data
 	screen = SDL_CreateRGBSurface(0, SCREEN_W, SCREEN_H, 24, 0x00, 0x00, 0x00, 0x00);
 	SDL_SetColorKey(screen, 1, 0xFF00FF);
 	SDL_FillRect(screen, 0, 0xFF00FF);
