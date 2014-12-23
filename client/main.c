@@ -22,11 +22,16 @@ gcc main.c -o client.exe -I./include -L./lib -lmingw32 -lSDL2main -lSDL2 -lSDL2_
 int serverChannel;
 IPaddress serverIp;
 UDPsocket clientFD;
+SDLNet_SocketSet socketSet;
 
 SDL_bool running;
 SDL_Window *window;
 SDL_Surface *screen;
 SDL_Renderer *renderer;
+
+//-----------------------------------------------------------------------------
+void inputPoll(void);
+void networkPoll(void);
 
 //-----------------------------------------------------------------------------
 void libInit(void);
@@ -82,13 +87,14 @@ int main(int argc, char *argv[]) {
 	packet.len = offset;
 
 	// NOTE: SDLNet_UDP_Send returns the number of people the packet was sent to
-	int numSent = SDLNet_UDP_Send(clientFD, serverChannel, &packet);
-	if(!numSent) {
-		// NOTE: this might not be a huge error
+	if(!SDLNet_UDP_Send(clientFD, serverChannel, &packet))
 		fprintf(stderr, "SDLNet_UDP_Send: %s\n", SDLNet_GetError());
-	}
 
 	free(packet.data);
+
+	// NOTE: setup the socketset
+	socketSet = SDLNet_AllocSocketSet(1);
+	SDLNet_UDP_AddSocket(socketSet, clientFD);
 
 	/* === */
 
@@ -98,35 +104,8 @@ int main(int argc, char *argv[]) {
 
 		/* === */
 
-		SDL_Event event;
-		while(SDL_PollEvent(&event)) {
-			switch(event.type) {
-				case SDL_QUIT: {
-					running = SDL_FALSE;
-				} break;
-				case SDL_KEYDOWN: {
-					switch(event.key.keysym.sym) {
-						case SDLK_ESCAPE:  break;
-						case SDLK_UP:  break;
-						case SDLK_DOWN:  break;
-						case SDLK_LEFT:  break;
-						case SDLK_RIGHT:  break;
-						case SDLK_LCTRL:  break;
-						case SDLK_LALT:  break;
-					}
-				} break;
-				case SDL_KEYUP: {
-					switch(event.key.keysym.sym) {
-						case SDLK_UP:  break;
-						case SDLK_DOWN:  break;
-						case SDLK_LEFT:  break;
-						case SDLK_RIGHT:  break;
-						case SDLK_LCTRL:  break;
-						case SDLK_LALT:  break;
-					}
-				} break;
-			}
-		}
+		inputPoll();
+		networkPoll();
 
 		/* === */
 
@@ -168,13 +147,13 @@ int main(int argc, char *argv[]) {
 	packet.len = offset;
 
 	// NOTE: SDLNet_UDP_Send returns the number of people the packet was sent to
-	numSent = SDLNet_UDP_Send(clientFD, serverChannel, &packet);
-	if(!numSent) {
-		// NOTE: this might not be a huge error
+	if(!SDLNet_UDP_Send(clientFD, serverChannel, &packet))
 		fprintf(stderr, "SDLNet_UDP_Send: %s\n", SDLNet_GetError());
-	}
 
 	free(packet.data);
+
+	// NOTE: free socketset
+	SDLNet_FreeSocketSet(socketSet);
 
 	/* === */
 
@@ -186,18 +165,112 @@ int main(int argc, char *argv[]) {
 }
 
 //-----------------------------------------------------------------------------
+void inputPoll(void) {
+	SDL_Event event;
+	while(SDL_PollEvent(&event)) {
+		switch(event.type) {
+			case SDL_QUIT: {
+				running = SDL_FALSE;
+			} break;
+			case SDL_KEYDOWN: {
+				switch(event.key.keysym.sym) {
+					case SDLK_ESCAPE:  break;
+					case SDLK_UP:  break;
+					case SDLK_DOWN:  break;
+					case SDLK_LEFT:  break;
+					case SDLK_RIGHT:  break;
+					case SDLK_LCTRL:  break;
+					case SDLK_LALT:  break;
+				}
+			} break;
+			case SDL_KEYUP: {
+				switch(event.key.keysym.sym) {
+					case SDLK_UP:  break;
+					case SDLK_DOWN:  break;
+					case SDLK_LEFT:  break;
+					case SDLK_RIGHT:  break;
+					case SDLK_LCTRL:  break;
+					case SDLK_LALT:  break;
+				}
+			} break;
+		}
+	}
+}
+
+//-----------------------------------------------------------------------------
+void networkPoll(void) {
+	// NOTE: check packet for a connection
+	if(SDLNet_CheckSockets(socketSet, 0)==-1) {
+		fprintf(stderr, "SDLNet_CheckSockets: %s\n", SDLNet_GetError());
+		return;
+	}
+
+	if(SDLNet_SocketReady(clientFD)) {
+		// NOTE: setup a packet which is big enough to store any server message
+		UDPpacket packet;
+
+		// NOTE: allocate space for packet
+		packet.maxlen = 0xAA; // 170 bytes
+		packet.data = (uint8_t *)malloc(0xAA);
+
+		// NOTE: get packet
+		int recv = SDLNet_UDP_Recv(clientFD, &packet);
+		if(!recv) {
+			free(packet.data);
+			return;
+		}
+
+		// NOTE: display IPaddress infomation
+		Uint32 ipaddr = SDL_SwapBE32(packet.address.host);
+		printf("packet from-> %d.%d.%d.%d:%d bound to channel %d\n",
+			ipaddr>>24, (ipaddr>>16)&0xFF, (ipaddr>>8)&0xFF, ipaddr&0xFF,
+			SDL_SwapBE16(packet.address.port), packet.channel);
+
+		// NOTE: if it isn't the server then ignore it
+		if(packet.channel!=serverChannel) {
+			free(packet.data);
+			return;
+		}
+
+		// NOTE: read the flag for packet identity
+		uint8_t flag;
+
+		memcpy(&flag, packet.data, 1);
+		uint8_t offset = 1;
+
+		// NOTE: process the packet
+		switch(flag) {
+			case 0x01: {
+				printf("Incorrect password.\n");
+			} break;
+			case 0x02: {
+				printf("Account in use.");
+			} break;
+			case 0x03: {
+				printf("Login success!\n");
+			} break;
+		}
+
+		// NOTE: free the packet
+		free(packet.data);
+	}
+}
+
+//-----------------------------------------------------------------------------
 void libInit(void) {
-	// NOTE: initialize the libraries
+	// NOTE: initialize SDL2
 	if(SDL_Init(SDL_INIT_EVERYTHING)!=0) {
 		fprintf(stderr, "SDL_Init: %s\n", SDL_GetError());
 		exit(-1);
 	}
 
+	// NOTE: initialize SDLNet
 	if(SDLNet_Init()==-1) {
 		fprintf(stderr, "SDLNet_Init: %s\n", SDLNet_GetError());
 		exit(-1);
 	}
 
+	// NOTE: initialize SDL_TTF
 	if(TTF_Init()==-1) {
 		fprintf(stderr, "TTF_Init: %s\n", TTF_GetError());
 		exit(-1);
@@ -282,9 +355,13 @@ void gfxInit(void) {
 
 //-----------------------------------------------------------------------------
 void libQuit(void) {
-	// NOTE: release the libraries
+	// NOTE: release SDL_TTF
 	TTF_Quit();
+
+	// NOTE: release SDLNet
 	SDLNet_Quit();
+
+	// NOTE: release SDL2
 	SDL_Quit();
 }
 

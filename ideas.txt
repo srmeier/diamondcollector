@@ -97,6 +97,7 @@ decline
 /* ServerPacketFlags
 0x01 = incorrectPassword
 0x02 = accountInUse
+0x03 = loginSuccess
 */
 
 - accept and decline are sent back to the server but never out to other players

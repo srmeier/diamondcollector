@@ -130,6 +130,17 @@ int main(int argc, char *argv[]) {
 								// NOTE: retCode = 0x01 on password match
 								printf("Login success!\n");
 
+								uint8_t sFlag = 0x03;
+								UDPpacket sPacket = {};
+
+								sPacket.len = 1;
+								sPacket.data = &sFlag;
+								sPacket.maxlen = 1;
+								sPacket.address = packet.address;
+
+								if(!SDLNet_UDP_Send(serverFD, -1, &sPacket))
+									fprintf(stderr, "SDLNet_UDP_Send: %s\n", SDLNet_GetError());
+
 								// NOTE: get the player's X, Y, Node, and DiamondCount to send out
 							} break;
 							case 0x02: {
@@ -178,6 +189,9 @@ int main(int argc, char *argv[]) {
 			free(packet.data);
 		}
 	}
+
+	// NOTE: free socketset
+	SDLNet_FreeSocketSet(socketSet);
 
 	// NOTE: close the socket file descriptor
 	SDLNet_UDP_Close(serverFD);
