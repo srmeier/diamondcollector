@@ -1,0 +1,100 @@
+"Multiplayer diamond collector"
+- make some C executables
+
+/* PlayerState
+0x00 = offline
+0x00 < online
+0x03 > idle
+0x03 = moving up
+0x04 = moving down
+0x05 = moving left
+0x06 = moving right
+0x07 = mining up
+0x08 = mining down
+0x09 = mining left
+0x0A = mining right
+*/
+
+- states other than 0x00, 0x01, or 0x02 are considered "dirty" and the server
+	needs to send out packets of the state type and set the state back to 0x01
+	the true idle state
+- idle 0x01 is true idle, idle 0x02 is waiting for interaction reply
+- check for changes in player state and send it out across the network
+- when a player gets a message about a change to player state the client
+	queues the changes and handles them
+- once the server sends out the update then the player's state is set to idle
+- the clients will set the other players to idle after the state is processed
+
+/* InteractionType
+0x00 = none
+0x01 = mining
+*/
+
+/*
+login
+- sets player to "idle" status and sends it out
+logout
+- sets player to "offline" status and sends it out
+
+getX
+- returns the horizontal grid index
+getY
+- returns the vertical grid index
+getNode
+- returns overworld node index
+getDiamondCount
+- returns the number of diamonds collected
+
+moveUp
+- check player state
+- checks if move is valid
+- checks if accept/decline is needed else
+- sets the player's Y index minus one and sends it out
+moveDown
+- check player state
+- checks if move is valid
+- checks if accept/decline is needed else
+- sets the player's Y index plus one and sends it out
+moveLeft
+- check player state
+- checks if move is valid
+- checks if accept/decline is needed else
+- sets the player's X index minus one and sends it out
+moveRight
+- check player state
+- checks if move is valid
+- checks if accept/decline is needed else
+- sets the player's X index plus one and sends it out
+
+accept
+- if the player bumps against an interactive object then
+- send out the type of interaction request
+- this is the reply from the client after getting the interaction request
+- if accepted then the server sets and sends out the state
+decline
+- if the player bumps against an interactive object then
+- send out the type of interaction request
+- this is the reply from the client after getting the interaction request
+- if the interaction request is declined then do nothing
+*/
+
+- getX, getY, getNode, and getDiamondCount are more for debugging since they
+	don't check to see if the player is online
+
+/* PacketFlags
+0x01 = login
+0x02 = logout
+0x03 = getX
+0x04 = getY
+0x05 = getNode
+0x06 = getDiamondCount
+0x07 = moveUp
+0x08 = moveDown
+0x09 = moveLeft
+0x0A = moveRight
+*/
+
+- accept and decline are sent back to the server but never out to other players
+- the password acts as a key which allows to server to process requests to
+	change player state. if the passwords don't match then the request is
+	declined
