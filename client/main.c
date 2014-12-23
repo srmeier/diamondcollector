@@ -143,7 +143,38 @@ int main(int argc, char *argv[]) {
 
 	/* === */
 
+	// NOTE: send logout packet
+	memset(&packet, 0, sizeof(packet));
 
+	unSize = strlen(argv[1]);
+	pwSize = strlen(argv[2]);
+
+	packet.maxlen = 1+4+unSize+4+pwSize;
+	packet.data = (uint8_t *)malloc(packet.maxlen);
+
+	offset = 0;
+
+	memset(packet.data+offset, 0x02, 1);
+	offset += 1;
+	memcpy(packet.data+offset, &unSize, 4);
+	offset += 4;
+	memcpy(packet.data+offset, argv[1], unSize);
+	offset += unSize;
+	memcpy(packet.data+offset, &pwSize, 4);
+	offset += 4;
+	memcpy(packet.data+offset, argv[2], pwSize);
+	offset += pwSize;
+
+	packet.len = offset;
+
+	// NOTE: SDLNet_UDP_Send returns the number of people the packet was sent to
+	numSent = SDLNet_UDP_Send(clientFD, serverChannel, &packet);
+	if(!numSent) {
+		// NOTE: this might not be a huge error
+		fprintf(stderr, "SDLNet_UDP_Send: %s\n", SDLNet_GetError());
+	}
+
+	free(packet.data);
 
 	/* === */
 

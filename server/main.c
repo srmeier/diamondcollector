@@ -21,7 +21,6 @@ gcc main.c -o server -L./ -lSDL2main -lSDL2 -lSDL2_net -lsqlite3
 
 //-----------------------------------------------------------------------------
 sqlite3 *database;
-
 UDPsocket serverFD;
 SDLNet_SocketSet socketSet;
 
@@ -37,6 +36,15 @@ struct loginData {
 };
 
 uint8_t playerLogin(char *username, char *password, uint32_t *playerID);
+
+//-----------------------------------------------------------------------------
+struct logoutData {
+	uint8_t flag;
+	char *password;
+	uint32_t playerID;
+};
+
+uint8_t playerLogout(char *username, char *password, uint32_t *playerID);
 
 //-----------------------------------------------------------------------------
 int main(int argc, char *argv[]) {
@@ -60,6 +68,7 @@ int main(int argc, char *argv[]) {
 	// NOTE: setup a socket set
 	socketSet = SDLNet_AllocSocketSet(1);
 	SDLNet_UDP_AddSocket(socketSet, serverFD);
+	printf("\nServer open on port: %d\n\n", 3490);
 
 	for(;;) {
 		// NOTE: wait for a connection
@@ -120,6 +129,41 @@ int main(int argc, char *argv[]) {
 
 						if(flag==0x01) {
 							printf("Login success!\n");
+
+							// NOTE: get the player's X, Y, Node, and DiamondCount to send out
+						}
+					}
+
+					free(username);
+					free(password);
+				} break;
+
+				case 0x02: {
+					uint32_t unSize;
+					memcpy(&unSize, packet.data+offset, 4);
+					offset += 4;
+
+					char *username = (char *)malloc(unSize+1);
+					memcpy(username, packet.data+offset, unSize);
+					username[unSize] = '\0';
+					offset += unSize;
+
+					uint32_t pwSize;
+					memcpy(&pwSize, packet.data+offset, 4);
+					offset += 4;
+
+					char *password = (char *)malloc(pwSize+1);
+					memcpy(password, packet.data+offset, pwSize);
+					password[pwSize] = '\0';
+					offset += pwSize;
+
+					if(offset==packet.len) {
+						// NOTE: check that the player's password matches
+						uint32_t playerID;
+						uint8_t flag = playerLogout(username, password, &playerID);
+
+						if(flag==0x02) {
+							printf("Logout success!\n");
 						}
 					}
 
@@ -181,7 +225,6 @@ uint8_t playerLogin(char *username, char *password, uint32_t *playerID) {
 		sqlite3_free(errorMsg);
 	}
 
-	/*
 	// NOTE: if the password matches then set the player state to true idle (0x01)
 	if(data.flag==0x01) {
 		memset(sqlCmd, 0, 0xFF);
@@ -192,7 +235,59 @@ uint8_t playerLogin(char *username, char *password, uint32_t *playerID) {
 			sqlite3_free(errorMsg);
 		}
 	}
-	*/
+
+	*playerID = data.playerID;
+
+	return data.flag;
+}
+
+//-----------------------------------------------------------------------------
+int playerLogoutCB(void *data, int argc, char *argv[], char *colName[]) {
+	// NOTE: make sure player is online
+	uint8_t *flag = &((struct logoutData *)data)->flag;
+	char *password = ((struct logoutData *)data)->password;
+	uint32_t *playerID = &((struct logoutData *)data)->playerID;
+
+	int i;
+	int isOnline = 0;
+	for(i=0; i<argc; i++){
+		if(!strcmp(colName[i], "PlayerID"))
+			*playerID = (uint32_t) atoi(argv[i]);
+		if(!strcmp(colName[i], "Password"))
+			*flag = !strcmp(argv[i], password);
+		if(!strcmp(colName[i], "State"))
+			isOnline = strcmp(argv[i], "0")!=0;
+
+		// NOTE: if the account is in use set flag to 0x02
+		if(isOnline) *flag = 0x02;
+	}
+
+	return 0;
+}
+
+//-----------------------------------------------------------------------------
+uint8_t playerLogout(char *username, char *password, uint32_t *playerID) {
+	// NOTE: check that the player's password matches
+	char sqlCmd[0xFF] = {};
+	sprintf(sqlCmd, "SELECT * FROM Players WHERE Username = '%s';", username);
+	struct logoutData data = {0, password, 0};
+
+	char *errorMsg;
+	if(sqlite3_exec(database, sqlCmd, playerLogoutCB, &data, &errorMsg)!=SQLITE_OK) {
+		fprintf(stderr, "SQL error: %s\n", errorMsg);
+		sqlite3_free(errorMsg);
+	}
+
+	// NOTE: if the password matches then set the player state to offline (0x00)
+	if(data.flag==0x02) {
+		memset(sqlCmd, 0, 0xFF);
+		sprintf(sqlCmd, "UPDATE Players SET State = 0 WHERE Username = '%s';", username);
+
+		if(sqlite3_exec(database, sqlCmd, NULL, 0, &errorMsg)!=SQLITE_OK) {
+			fprintf(stderr, "SQL error: %s\n", errorMsg);
+			sqlite3_free(errorMsg);
+		}
+	}
 
 	*playerID = data.playerID;
 
