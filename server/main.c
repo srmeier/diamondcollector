@@ -14,37 +14,26 @@ gcc main.c -o server -L./ -lSDL2main -lSDL2 -lSDL2_net -lsqlite3
 
 #include "sqlite3.h"
 
-// NOTE: if login successes then bind client IP to channel
-// NOTE: 4 possible ips per channel, 32 channels, 128 possible
-// players online. I will have to keep track of which channels
-// I've put players on so I can send a packet on each channel
-
 //-----------------------------------------------------------------------------
 sqlite3 *database;
 UDPsocket serverFD;
 SDLNet_SocketSet socketSet;
 
 //-----------------------------------------------------------------------------
+#include "types.h"
+#include "login.h"
+#include "logout.h"
+
+// NOTE: if login successes then bind client IP to channel
+// NOTE: 4 possible ips per channel, 32 channels, 128 possible
+// players online. I will have to keep track of which channels
+// I've put players on so I can send a packet on each channel
+// NOTE: packets other than login can be ignored when the sender isn't bound to
+// a channel else the channel will be -1 if not bound
+
+//-----------------------------------------------------------------------------
 void libInit(void);
 void libQuit(void);
-
-//-----------------------------------------------------------------------------
-struct loginData {
-	uint8_t flag;
-	char *password;
-	uint32_t playerID;
-};
-
-uint8_t playerLogin(char *username, char *password, uint32_t *playerID);
-
-//-----------------------------------------------------------------------------
-struct logoutData {
-	uint8_t flag;
-	char *password;
-	uint32_t playerID;
-};
-
-uint8_t playerLogout(char *username, char *password, uint32_t *playerID);
 
 //-----------------------------------------------------------------------------
 int main(int argc, char *argv[]) {
@@ -73,10 +62,15 @@ int main(int argc, char *argv[]) {
 	for(;;) {
 		// NOTE: wait for a connection
 		int n = SDLNet_CheckSockets(socketSet, -1);
+
 		if(n==-1) {
 			fprintf(stderr, "SDLNet_CheckSockets: %s\n", SDLNet_GetError());
 			break;
-		} if(!n) continue;
+		} if(!n) {
+			// NOTE: if the server doesn't recieve anything then clean up player state
+			// and send out any ping-pong packets to make sure the client is still connected
+			continue;
+		}
 
 		// NOTE: only need to check the server
 		if(SDLNet_SocketReady(serverFD)) {
@@ -89,86 +83,62 @@ int main(int argc, char *argv[]) {
 
 			// NOTE: get packet
 			int recv = SDLNet_UDP_Recv(serverFD, &packet);
-			if(!recv) continue;
+			if(!recv) {
+				free(packet.data);
+				continue;
+			}
 
 			// NOTE: display IPaddress infomation
 			Uint32 ipaddr = SDL_SwapBE32(packet.address.host);
-			printf("packet from-> %d.%d.%d.%d:%d\n", ipaddr>>24, (ipaddr>>16)&0xFF,
-				(ipaddr>>8)&0xFF, ipaddr&0xFF, SDL_SwapBE16(packet.address.port));
+			printf("packet from-> %d.%d.%d.%d:%d bound to channel %d\n",
+				ipaddr>>24, (ipaddr>>16)&0xFF, (ipaddr>>8)&0xFF, ipaddr&0xFF,
+				SDL_SwapBE16(packet.address.port), packet.channel);
 
 			// NOTE: read the flag for packet identity
 			uint8_t flag;
+
 			memcpy(&flag, packet.data, 1);
 			uint8_t offset = 1;
 
-			// NOTE: process packet
+			// NOTE: process the packet
 			switch(flag) {
 				case 0x01: {
-					uint32_t unSize;
-					memcpy(&unSize, packet.data+offset, 4);
-					offset += 4;
-
-					char *username = (char *)malloc(unSize+1);
-					memcpy(username, packet.data+offset, unSize);
-					username[unSize] = '\0';
-					offset += unSize;
-
-					uint32_t pwSize;
-					memcpy(&pwSize, packet.data+offset, 4);
-					offset += 4;
-
-					char *password = (char *)malloc(pwSize+1);
-					memcpy(password, packet.data+offset, pwSize);
-					password[pwSize] = '\0';
-					offset += pwSize;
+					// NOTE: get login packet data struct
+					struct loginPacket p = exLoginPacket(&packet, &offset);
 
 					if(offset==packet.len) {
 						// NOTE: check that the player's password matches
 						uint32_t playerID;
-						uint8_t flag = playerLogin(username, password, &playerID);
 
-						if(flag==0x01) {
-							printf("Login success!\n");
-
-							// NOTE: get the player's X, Y, Node, and DiamondCount to send out
+						switch(playerLogin(&p, &playerID)) {
+							case 0x01: {
+								printf("Login success!\n");
+								// NOTE: get the player's X, Y, Node, and DiamondCount to send out
+							} break;
 						}
 					}
 
-					free(username);
-					free(password);
+					free(p.username);
+					free(p.password);
 				} break;
 
 				case 0x02: {
-					uint32_t unSize;
-					memcpy(&unSize, packet.data+offset, 4);
-					offset += 4;
-
-					char *username = (char *)malloc(unSize+1);
-					memcpy(username, packet.data+offset, unSize);
-					username[unSize] = '\0';
-					offset += unSize;
-
-					uint32_t pwSize;
-					memcpy(&pwSize, packet.data+offset, 4);
-					offset += 4;
-
-					char *password = (char *)malloc(pwSize+1);
-					memcpy(password, packet.data+offset, pwSize);
-					password[pwSize] = '\0';
-					offset += pwSize;
+					// NOTE: get logout packet data struct
+					struct logoutPacket p = exLogoutPacket(&packet, &offset);
 
 					if(offset==packet.len) {
 						// NOTE: check that the player's password matches
 						uint32_t playerID;
-						uint8_t flag = playerLogout(username, password, &playerID);
 
-						if(flag==0x02) {
-							printf("Logout success!\n");
+						switch(playerLogout(&p, &playerID)) {
+							case 0x02: {
+								printf("Logout success!\n");
+							} break;
 						}
 					}
 
-					free(username);
-					free(password);
+					free(p.username);
+					free(p.password);
 				} break;
 			}
 
@@ -189,119 +159,14 @@ int main(int argc, char *argv[]) {
 }
 
 //-----------------------------------------------------------------------------
-int playerLoginCB(void *data, int argc, char *argv[], char *colName[]) {
-	// NOTE: check if password matches
-	uint8_t *flag = &((struct loginData *)data)->flag;
-	char *password = ((struct loginData *)data)->password;
-	uint32_t *playerID = &((struct loginData *)data)->playerID;
-
-	int i;
-	int isOnline = 0;
-	for(i=0; i<argc; i++){
-		if(!strcmp(colName[i], "PlayerID"))
-			*playerID = (uint32_t) atoi(argv[i]);
-		if(!strcmp(colName[i], "Password"))
-			*flag = !strcmp(argv[i], password);
-		if(!strcmp(colName[i], "State"))
-			isOnline = strcmp(argv[i], "0")!=0;
-
-		// NOTE: if the account is in use set flag to 0x02
-		if(isOnline) *flag = 0x02;
-	}
-
-	return 0;
-}
-
-//-----------------------------------------------------------------------------
-uint8_t playerLogin(char *username, char *password, uint32_t *playerID) {
-	// NOTE: check that the player's password matches
-	char sqlCmd[0xFF] = {};
-	sprintf(sqlCmd, "SELECT * FROM Players WHERE Username = '%s';", username);
-	struct loginData data = {0, password, 0};
-
-	char *errorMsg;
-	if(sqlite3_exec(database, sqlCmd, playerLoginCB, &data, &errorMsg)!=SQLITE_OK) {
-		fprintf(stderr, "SQL error: %s\n", errorMsg);
-		sqlite3_free(errorMsg);
-	}
-
-	// NOTE: if the password matches then set the player state to true idle (0x01)
-	if(data.flag==0x01) {
-		memset(sqlCmd, 0, 0xFF);
-		sprintf(sqlCmd, "UPDATE Players SET State = 1 WHERE Username = '%s';", username);
-
-		if(sqlite3_exec(database, sqlCmd, NULL, 0, &errorMsg)!=SQLITE_OK) {
-			fprintf(stderr, "SQL error: %s\n", errorMsg);
-			sqlite3_free(errorMsg);
-		}
-	}
-
-	*playerID = data.playerID;
-
-	return data.flag;
-}
-
-//-----------------------------------------------------------------------------
-int playerLogoutCB(void *data, int argc, char *argv[], char *colName[]) {
-	// NOTE: make sure player is online
-	uint8_t *flag = &((struct logoutData *)data)->flag;
-	char *password = ((struct logoutData *)data)->password;
-	uint32_t *playerID = &((struct logoutData *)data)->playerID;
-
-	int i;
-	int isOnline = 0;
-	for(i=0; i<argc; i++){
-		if(!strcmp(colName[i], "PlayerID"))
-			*playerID = (uint32_t) atoi(argv[i]);
-		if(!strcmp(colName[i], "Password"))
-			*flag = !strcmp(argv[i], password);
-		if(!strcmp(colName[i], "State"))
-			isOnline = strcmp(argv[i], "0")!=0;
-
-		// NOTE: if the account is in use set flag to 0x02
-		if(isOnline) *flag = 0x02;
-	}
-
-	return 0;
-}
-
-//-----------------------------------------------------------------------------
-uint8_t playerLogout(char *username, char *password, uint32_t *playerID) {
-	// NOTE: check that the player's password matches
-	char sqlCmd[0xFF] = {};
-	sprintf(sqlCmd, "SELECT * FROM Players WHERE Username = '%s';", username);
-	struct logoutData data = {0, password, 0};
-
-	char *errorMsg;
-	if(sqlite3_exec(database, sqlCmd, playerLogoutCB, &data, &errorMsg)!=SQLITE_OK) {
-		fprintf(stderr, "SQL error: %s\n", errorMsg);
-		sqlite3_free(errorMsg);
-	}
-
-	// NOTE: if the password matches then set the player state to offline (0x00)
-	if(data.flag==0x02) {
-		memset(sqlCmd, 0, 0xFF);
-		sprintf(sqlCmd, "UPDATE Players SET State = 0 WHERE Username = '%s';", username);
-
-		if(sqlite3_exec(database, sqlCmd, NULL, 0, &errorMsg)!=SQLITE_OK) {
-			fprintf(stderr, "SQL error: %s\n", errorMsg);
-			sqlite3_free(errorMsg);
-		}
-	}
-
-	*playerID = data.playerID;
-
-	return data.flag;
-}
-
-//-----------------------------------------------------------------------------
 void libInit(void) {
-	// NOTE: initialize the libraries
+	// NOTE: initialize SDL2
 	if(SDL_Init(SDL_INIT_TIMER)!=0) {
 		fprintf(stderr, "SDL_Init: %s\n", SDL_GetError());
 		exit(-1);
 	}
 
+	// NOTE: initialize SDLNet
 	if(SDLNet_Init()==-1) {
 		fprintf(stderr, "SDLNet_Init: %s\n", SDLNet_GetError());
 		exit(-1);
@@ -310,7 +175,9 @@ void libInit(void) {
 
 //-----------------------------------------------------------------------------
 void libQuit(void) {
-	// NOTE: release the libraries
+	// NOTE: release SDL2
 	SDLNet_Quit();
+
+	// NOTE: release SDLNet
 	SDL_Quit();
 }
