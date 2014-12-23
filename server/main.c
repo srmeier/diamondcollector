@@ -1,6 +1,6 @@
-/*
+/* Requires SDL2 and SDLNet to be installed
 export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:/usr/local/lib"
-gcc main.c -o server -lSDL2main -lSDL2 -lSDL2_net
+gcc main.c -o server -L./ -lSDL2main -lSDL2 -lSDL2_net -lsqlite3
 */
 
 //-----------------------------------------------------------------------------
@@ -12,88 +12,132 @@ gcc main.c -o server -lSDL2main -lSDL2 -lSDL2_net
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_net.h>
 
+#include "sqlite3.h"
+
+// NOTE: if login successes then bind client IP to channel
+// NOTE: 4 possible ips per channel, 32 channels, 128 possible
+// players online. I will have to keep track of which channels
+// I've put players on so I can send a packet on each channel
+
+//-----------------------------------------------------------------------------
+sqlite3 *database;
+
+UDPsocket serverFD;
+SDLNet_SocketSet socketSet;
+
 //-----------------------------------------------------------------------------
 void libInit(void);
 void libQuit(void);
 
 //-----------------------------------------------------------------------------
-int main(int argc, char* argv[]) {
+struct loginData {
+	uint8_t flag;
+	char *password;
+	uint32_t playerID;
+};
+
+uint8_t playerLogin(char *username, char *password, uint32_t *playerID);
+
+//-----------------------------------------------------------------------------
+int main(int argc, char *argv[]) {
 	libInit();
 
-	/*
-	// NOTE: get IPaddress struct
-	IPaddress ip;
-	if(SDLNet_ResolveHost(&ip, NULL, 3490) == -1) {
-		fprintf(stderr, "SDLNet_ResolveHost: %s\n", SDLNet_GetError());
-		libQuit();
+	// NOTE: open database connection
+	if(sqlite3_open("diamond_collector.db", &database)) {
+		fprintf(stderr, "sqlite3_open: %s\n", sqlite3_errmsg(database));
+		sqlite3_close(database);
 		return -1;
 	}
 
-	// NOTE: display IPaddress infomation
-	Uint32 ipaddr = SDL_SwapBE32(ip.host);
-	printf("ServerInfo-> %d.%d.%d.%d:%d\n", ipaddr>>24, (ipaddr>>16)&0xFF,
-		(ipaddr>>8)&0xFF, ipaddr&0xFF, SDL_SwapBE16(ip.port));
-	*/
-
 	// NOTE: open socket file descriptor
-	UDPsocket server = SDLNet_UDP_Open(3490);
-	if(!server) {
+	serverFD = SDLNet_UDP_Open(3490);
+	if(!serverFD) {
 		fprintf(stderr, "SDLNet_UDP_Open: %s\n", SDLNet_GetError());
 		libQuit();
 		return -1;
 	}
 
 	// NOTE: setup a socket set
-	int numClients = 0;
-	SDLNet_SocketSet socketSet = SDLNet_AllocSocketSet(1);
-	SDLNet_UDP_AddSocket(socketSet, server);
+	socketSet = SDLNet_AllocSocketSet(1);
+	SDLNet_UDP_AddSocket(socketSet, serverFD);
 
-	// NOTE: wait for a connection
 	for(;;) {
-		int numRdy = SDLNet_CheckSockets(socketSet, -1);
-		if(numRdy == -1) {
+		// NOTE: wait for a connection
+		int n = SDLNet_CheckSockets(socketSet, -1);
+		if(n==-1) {
 			fprintf(stderr, "SDLNet_CheckSockets: %s\n", SDLNet_GetError());
 			break;
-		} if(!numRdy) continue;
+		} if(!n) continue;
 
-		if(SDLNet_SocketReady(server)) {
-			numRdy--;
-
+		// NOTE: only need to check the server
+		if(SDLNet_SocketReady(serverFD)) {
+			// NOTE: setup a packet which is big enough to store any client message
 			UDPpacket packet;
-			packet.maxlen = 0xFF;
-			packet.data = (uint8_t *)malloc(0xFF);
 
-			int numrecv = SDLNet_UDP_Recv(server, &packet);
-			printf("got a packet of size: %d\n", packet.len);
+			// NOTE: allocate space for packet
+			packet.maxlen = 0xAA; // 170 bytes
+			packet.data = (uint8_t *)malloc(0xAA);
 
-			free(packet.data);
+			// NOTE: get packet
+			int recv = SDLNet_UDP_Recv(serverFD, &packet);
+			if(!recv) continue;
 
-			/*
-			TCPsocket sock = SDLNet_TCP_Accept(server);
-			if(sock) {
-				unsigned char data[4];
-				int bsent = SDLNet_TCP_Recv(sock, data, sizeof data);
+			// NOTE: display IPaddress infomation
+			Uint32 ipaddr = SDL_SwapBE32(packet.address.host);
+			printf("packet from-> %d.%d.%d.%d:%d\n", ipaddr>>24, (ipaddr>>16)&0xFF,
+				(ipaddr>>8)&0xFF, ipaddr&0xFF, SDL_SwapBE16(packet.address.port));
 
-				if(bsent < sizeof data) {
-					if(SDLNet_GetError() && strlen(SDLNet_GetError())) {
-						printf("SDLNet_TCP_Recv: %s\n", SDLNet_GetError());
+			// NOTE: read the flag for packet identity
+			uint8_t flag;
+			memcpy(&flag, packet.data, 1);
+			uint8_t offset = 1;
+
+			// NOTE: process packet
+			switch(flag) {
+				case 0x01: {
+					uint32_t unSize;
+					memcpy(&unSize, packet.data+offset, 4);
+					offset += 4;
+
+					char *username = (char *)malloc(unSize+1);
+					memcpy(username, packet.data+offset, unSize);
+					username[unSize] = '\0';
+					offset += unSize;
+
+					uint32_t pwSize;
+					memcpy(&pwSize, packet.data+offset, 4);
+					offset += 4;
+
+					char *password = (char *)malloc(pwSize+1);
+					memcpy(password, packet.data+offset, pwSize);
+					password[pwSize] = '\0';
+					offset += pwSize;
+
+					if(offset==packet.len) {
+						// NOTE: check that the player's password matches
+						uint32_t playerID;
+						uint8_t flag = playerLogin(username, password, &playerID);
+
+						if(flag==0x01) {
+							printf("Login success!\n");
+						}
 					}
-				} else if(bsent == 0) {
-					// NOTE: connection closed
-					printf("recv-> connection closed\n");
-					SDLNet_TCP_Close(sock);
-				} else {
-					// NOTE: print out the data
-					printf("recv-> %d\n", (int) *data);
-				}
-			} else SDLNet_TCP_Close(sock);
-			SDLNet_TCP_Close(sock);
-			*/
+
+					free(username);
+					free(password);
+				} break;
+			}
+
+			// NOTE: free the packet
+			free(packet.data);
 		}
 	}
 
 	// NOTE: close the socket file descriptor
-	SDLNet_UDP_Close(server);
+	SDLNet_UDP_Close(serverFD);
+
+	// NOTE: close database connection
+	sqlite3_close(database);
 
 	libQuit();
 
@@ -101,14 +145,69 @@ int main(int argc, char* argv[]) {
 }
 
 //-----------------------------------------------------------------------------
+int playerLoginCB(void *data, int argc, char *argv[], char *colName[]) {
+	// NOTE: check if password matches
+	uint8_t *flag = &((struct loginData *)data)->flag;
+	char *password = ((struct loginData *)data)->password;
+	uint32_t *playerID = &((struct loginData *)data)->playerID;
+
+	int i;
+	int isOnline = 0;
+	for(i=0; i<argc; i++){
+		if(!strcmp(colName[i], "PlayerID"))
+			*playerID = (uint32_t) atoi(argv[i]);
+		if(!strcmp(colName[i], "Password"))
+			*flag = !strcmp(argv[i], password);
+		if(!strcmp(colName[i], "State"))
+			isOnline = strcmp(argv[i], "0")!=0;
+
+		// NOTE: if the account is in use set flag to 0x02
+		if(isOnline) *flag = 0x02;
+	}
+
+	return 0;
+}
+
+//-----------------------------------------------------------------------------
+uint8_t playerLogin(char *username, char *password, uint32_t *playerID) {
+	// NOTE: check that the player's password matches
+	char sqlCmd[0xFF] = {};
+	sprintf(sqlCmd, "SELECT * FROM Players WHERE Username = '%s';", username);
+	struct loginData data = {0, password, 0};
+
+	char *errorMsg;
+	if(sqlite3_exec(database, sqlCmd, playerLoginCB, &data, &errorMsg)!=SQLITE_OK) {
+		fprintf(stderr, "SQL error: %s\n", errorMsg);
+		sqlite3_free(errorMsg);
+	}
+
+	/*
+	// NOTE: if the password matches then set the player state to true idle (0x01)
+	if(data.flag==0x01) {
+		memset(sqlCmd, 0, 0xFF);
+		sprintf(sqlCmd, "UPDATE Players SET State = 1 WHERE Username = '%s';", username);
+
+		if(sqlite3_exec(database, sqlCmd, NULL, 0, &errorMsg)!=SQLITE_OK) {
+			fprintf(stderr, "SQL error: %s\n", errorMsg);
+			sqlite3_free(errorMsg);
+		}
+	}
+	*/
+
+	*playerID = data.playerID;
+
+	return data.flag;
+}
+
+//-----------------------------------------------------------------------------
 void libInit(void) {
 	// NOTE: initialize the libraries
-	if(SDL_Init(SDL_INIT_TIMER) != 0) {
+	if(SDL_Init(SDL_INIT_TIMER)!=0) {
 		fprintf(stderr, "SDL_Init: %s\n", SDL_GetError());
 		exit(-1);
 	}
 
-	if(SDLNet_Init() == -1) {
+	if(SDLNet_Init()==-1) {
 		fprintf(stderr, "SDLNet_Init: %s\n", SDLNet_GetError());
 		exit(-1);
 	}
