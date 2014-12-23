@@ -41,10 +41,10 @@ int playerLoginCB(void *data, int argc, char *argv[], char *colName[]) {
 			*retCode = !strcmp(argv[i], password);
 		if(!strcmp(colName[i], "State"))
 			isOnline = strcmp(argv[i], "0")!=0; // NOTE: is '0' always zero?
-
-		// NOTE: if the account is in use set retCode to 0x02
-		if(isOnline) *retCode = 0x02;
 	}
+
+	// NOTE: if the account is in use set retCode to 0x02
+	if(isOnline&&*retCode) *retCode = 0x02;
 
 	return 0;
 }
@@ -64,18 +64,23 @@ uint8_t playerLogin(struct loginPacket *p, uint32_t *playerID) {
 		sqlite3_free(errorMsg);
 	}
 
-	// NOTE: if the password matches then set the player state to true idle (0x01)
-	if(data.retCode==0x01) {
-		memset(sqlCmd, 0, 0xFF);
-		sprintf(sqlCmd, "UPDATE Players SET State = 1 WHERE Username = '%s';", p->username);
-
-		if(sqlite3_exec(database, sqlCmd, NULL, 0, &errorMsg)!=SQLITE_OK) {
-			fprintf(stderr, "SQL error: %s\n", errorMsg);
-			sqlite3_free(errorMsg);
-		}
-	}
-
 	*playerID = data.playerID;
+	// NOTE: retCode = 0x00 on password mismatch
+	// NOTE: retCode = 0x01 on password match
+	// NOTE: retCode = 0x02 if password matches but the account is in use
+
+	switch(data.retCode) {
+		case 0x01: {
+			// NOTE: if the password matches then set the player state to true idle (0x01)
+			memset(sqlCmd, 0, 0xFF);
+			sprintf(sqlCmd, "UPDATE Players SET State = 1 WHERE PlayerID = %d;", *playerID);
+
+			if(sqlite3_exec(database, sqlCmd, NULL, 0, &errorMsg)!=SQLITE_OK) {
+				fprintf(stderr, "SQL error: %s\n", errorMsg);
+				sqlite3_free(errorMsg);
+			}
+		} break;
+	}
 
 	return data.retCode;
 }

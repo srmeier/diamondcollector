@@ -111,9 +111,41 @@ int main(int argc, char *argv[]) {
 						uint32_t playerID;
 
 						switch(playerLogin(&p, &playerID)) {
+							case 0x00: {
+								// NOTE: retCode = 0x00 on password mismatch
+								printf("Incorrect password.\n");
+
+								uint8_t sFlag = 0x01;
+								UDPpacket sPacket = {};
+
+								sPacket.len = 1;
+								sPacket.data = &sFlag;
+								sPacket.maxlen = 1;
+								sPacket.address = packet.address;
+
+								if(!SDLNet_UDP_Send(serverFD, -1, &sPacket))
+									fprintf(stderr, "SDLNet_UDP_Send: %s\n", SDLNet_GetError());
+							} break;
 							case 0x01: {
+								// NOTE: retCode = 0x01 on password match
 								printf("Login success!\n");
+
 								// NOTE: get the player's X, Y, Node, and DiamondCount to send out
+							} break;
+							case 0x02: {
+								// NOTE: retCode = 0x02 if password matches but the account is in use
+								printf("Account in use.\n");
+
+								uint8_t sFlag = 0x02;
+								UDPpacket sPacket = {};
+
+								sPacket.len = 1;
+								sPacket.data = &sFlag;
+								sPacket.maxlen = 1;
+								sPacket.address = packet.address;
+
+								if(!SDLNet_UDP_Send(serverFD, -1, &sPacket))
+									fprintf(stderr, "SDLNet_UDP_Send: %s\n", SDLNet_GetError());
 							} break;
 						}
 					}
