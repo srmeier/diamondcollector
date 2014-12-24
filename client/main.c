@@ -11,6 +11,10 @@ gcc main.c -o client.exe -I./include -L./lib -lmingw32 -lSDL2main -lSDL2 -lSDL2_
 #include <SDL2/SDL_ttf.h>
 #include <SDL2/SDL_net.h>
 
+/* TODO:
+- the server should include the mainChr info with the loginSuccess packet
+*/
+
 //-----------------------------------------------------------------------------
 #define SCREEN_W 320 // 40 -> 20
 #define SCREEN_H 240 // 30 -> 15
@@ -54,13 +58,14 @@ SDL_Surface *spritesheet[NUM_SPRITES];
 /* NOTE: instance variables */
 //-----------------------------------------------------------------------------
 struct Player mainChr;
+struct Player *chrsOnline;
 
 /* NOTE: instance includes */
 //-----------------------------------------------------------------------------
 #include "login.h"
 
 //-----------------------------------------------------------------------------
-
+uint8_t getChrsOnline(struct Player **chrsOnline, uint8_t retCode);
 
 //-----------------------------------------------------------------------------
 void inputPoll(void);
@@ -140,16 +145,38 @@ int main(int argc, char *argv[]) {
 					} break;
 					case 0x02: {
 						// NOTE: account in use
-						printf("account in use\n");
+						SDL_Color color0 = {0x73, 0x73, 0x73, 0x00};
+
+						char *str0 = "Account in use.";
+						drawText(str0, color0, 0, 0);
+
+						// NOTE: allow player to back out to try again
+						if(bBnt && !bChk) {
+							clearInput();
+							gameState = 0x00;
+						} else if(!bBnt) bChk = SDL_FALSE;
 					} break;
 					case 0x03: {
 						// NOTE: login success
 						printf("login success\n");
+						gameState = 0x02;
 					} break;
 				}
 			} break;
 			case 0x02: {
-				// NOTE: display the game state
+				// NOTE: login was a success so now we need to get all the current players info
+				static uint8_t retCode = 0xFF;
+				retCode = getChrsOnline(&chrsOnline, retCode);
+
+				switch(retCode) {
+					case 0x00: {
+						// NOTE: diaplay a connecting message and poll for the server response
+						SDL_Color color0 = {0x73, 0x73, 0x73, 0x00};
+
+						char *str0 = "Connecting...";
+						drawText(str0, color0, 0, 0);
+					} break;
+				}
 			} break;
 			case 0xFF: {
 				if(mainChr.state) {
@@ -185,6 +212,21 @@ int main(int argc, char *argv[]) {
 	libQuit();
 
 	return 0;
+}
+
+//-----------------------------------------------------------------------------
+uint8_t getChrsOnline(struct Player **chrsOnline, uint8_t retCode) {
+	// NOTE: get chrsOnline for a particular Node
+	switch(retCode) {
+		case 0x00: {
+			//struct Player *_chrsOnline = *chrsOnline;
+			//*chrsOnline = _chrsOnline;
+		} break;
+		case 0xFF: {
+			// NOTE: set the retCode
+			return 0x00;
+		} break;
+	}
 }
 
 //-----------------------------------------------------------------------------
