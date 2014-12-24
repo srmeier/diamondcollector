@@ -92,6 +92,7 @@ decline
 0x08 = moveDown
 0x09 = moveLeft
 0x0A = moveRight
+0x0B = getPlayersOnNode
 */
 
 /* ServerPacketFlags

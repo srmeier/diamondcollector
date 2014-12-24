@@ -57,6 +57,7 @@ SDL_Surface *spritesheet[NUM_SPRITES];
 
 /* NOTE: instance variables */
 //-----------------------------------------------------------------------------
+uint8_t numChrs;
 struct Player mainChr;
 struct Player *chrsOnline;
 
@@ -65,7 +66,7 @@ struct Player *chrsOnline;
 #include "login.h"
 
 //-----------------------------------------------------------------------------
-uint8_t getChrsOnline(struct Player **chrsOnline, uint8_t retCode);
+uint8_t getChrsOnline(struct Player **chrsOnline, uint8_t *numChrs, uint8_t retCode);
 
 //-----------------------------------------------------------------------------
 void inputPoll(void);
@@ -140,6 +141,7 @@ int main(int argc, char *argv[]) {
 						// NOTE: allow player to back out to correct username/password
 						if(bBnt && !bChk) {
 							clearInput();
+							retCode = 0xFF;
 							gameState = 0x00;
 						} else if(!bBnt) bChk = SDL_FALSE;
 					} break;
@@ -153,18 +155,20 @@ int main(int argc, char *argv[]) {
 						// NOTE: allow player to back out to try again
 						if(bBnt && !bChk) {
 							clearInput();
+							retCode = 0xFF;
 							gameState = 0x00;
 						} else if(!bBnt) bChk = SDL_FALSE;
 					} break;
 					case 0x03: {
 						// NOTE: login success
-						printf("login success\n");
+						printf("\nlogin success\n");
 
 						// NOTE: the other mainChr variables are set by server
 						mainChr.state = 0x01; // true idle
 						mainChr.username = username;
 						mainChr.password = password;
 
+						retCode = 0xFF;
 						gameState = 0x02;
 					} break;
 				}
@@ -180,18 +184,22 @@ int main(int argc, char *argv[]) {
 					printf("Username -> %s\n", mainChr.username);
 					printf("Password -> %s\n", mainChr.password);
 					printf("State    -> %d\n", mainChr.state);
-					printf("Count    -> %d\n", mainChr.count);
+					printf("Count    -> %d\n\n", mainChr.count);
 				}
 
-				retCode = getChrsOnline(&chrsOnline, retCode);
+				retCode = getChrsOnline(&chrsOnline, &numChrs, retCode);
 
 				switch(retCode) {
-					case 0x00: {
+					case 0x00:
+					case 0x01: {
 						// NOTE: diaplay a connecting message and poll for the server response
 						SDL_Color color0 = {0x73, 0x73, 0x73, 0x00};
 
-						char *str0 = "Connecting...";
+						char *str0 = "Waiting for server status...";
 						drawText(str0, color0, 0, 0);
+					} break;
+					case 0x02: {
+						// NOTE: we got all the players and everything...
 					} break;
 				}
 			} break;
@@ -232,15 +240,152 @@ int main(int argc, char *argv[]) {
 }
 
 //-----------------------------------------------------------------------------
-uint8_t getChrsOnline(struct Player **chrsOnline, uint8_t retCode) {
+uint8_t getChrsOnline(struct Player **chrsOnline, uint8_t *numChrs, uint8_t retCode) {
 	// NOTE: get chrsOnline for a particular Node
+	static uint8_t curChr = 0;
+	static uint8_t _numChrs = 0;
+	struct Player *_chrsOnline = *chrsOnline;
+
+	// NOTE: switch based on retCode
 	switch(retCode) {
 		case 0x00: {
-			//struct Player *_chrsOnline = *chrsOnline;
-			//*chrsOnline = _chrsOnline;
+			// NOTE: check for connections
+			if(SDLNet_CheckSockets(socketSet, 0)==-1) {
+				fprintf(stderr, "SDLNet_CheckSockets: %s\n", SDLNet_GetError());
+				return;
+			}
+
+			if(SDLNet_SocketReady(clientFD)) {
+				// NOTE: here we simply get how many players the server is going to send
+				UDPpacket packet;
+
+				// NOTE: allocate space for packet
+				packet.maxlen = 0x01;
+				packet.data = (uint8_t *)malloc(0x01);
+
+				// NOTE: get packet
+				int recv = SDLNet_UDP_Recv(clientFD, &packet);
+				if(!recv) {
+					free(packet.data);
+					return;
+				}
+
+				// NOTE: if it isn't the server then ignore it
+				if(packet.channel!=serverChannel) {
+					free(packet.data);
+					return;
+				}
+
+				// NOTE: on a successful flag set the numChrs
+				memcpy(&_numChrs, packet.data, 1);
+				*numChrs = _numChrs;
+
+				printf("receiving %d players.\n", _numChrs);
+				_chrsOnline = (struct Player *)malloc(_numChrs*sizeof(struct Player));
+				// TODO: remember to free this sometime
+
+				// NOTE: set the returning Player pointer
+				*chrsOnline = _chrsOnline;
+
+				// NOTE: free the packet
+				free(packet.data);
+
+				// NOTE: set the retCode
+				return 0x01;
+			}
+		} break;
+		case 0x01: {
+			// NOTE: check for connections
+			if(SDLNet_CheckSockets(socketSet, 0)==-1) {
+				fprintf(stderr, "SDLNet_CheckSockets: %s\n", SDLNet_GetError());
+				return;
+			}
+
+			if(SDLNet_SocketReady(clientFD)) {
+				// NOTE: get the incoming players
+				UDPpacket packet;
+
+				// NOTE: allocate space for packet
+				packet.maxlen = 0x18;
+				packet.data = (uint8_t *)malloc(0x18);
+
+				/*
+				- state        ( 4)
+				- PlayerID     ( 4)
+				- Node         ( 4)
+				- X            ( 4)
+				- Y            ( 4)
+				- DiamondCount ( 4)
+				============== (24)
+				*/
+
+				// NOTE: get packet
+				int recv = SDLNet_UDP_Recv(clientFD, &packet);
+				if(!recv) {
+					free(packet.data);
+					return;
+				}
+
+				// NOTE: if it isn't the server then ignore it
+				if(packet.channel!=serverChannel) {
+					free(packet.data);
+					return;
+				}
+
+				// NOTE: get the space for player
+				uint8_t offset = 0;
+				struct Player *chr = &_chrsOnline[curChr];
+
+				memcpy(&chr->state, packet.data+offset, 4);
+				offset += 4;
+				memcpy(&chr->id, packet.data+offset, 4);
+				offset += 4;
+				memcpy(&chr->node, packet.data+offset, 4);
+				offset += 4;
+				memcpy(&chr->x, packet.data+offset, 4);
+				offset += 4;
+				memcpy(&chr->y, packet.data+offset, 4);
+				offset += 4;
+				memcpy(&chr->count, packet.data+offset, 4);
+				offset += 4;
+
+				// NOTE: set the returning Player pointer
+				*chrsOnline = _chrsOnline;
+
+				// NOTE: free the packet
+				free(packet.data);
+
+				if(++curChr>=_numChrs) {
+					printf("got it all!\n\n");
+
+					int i;
+					for(i=0; i<_numChrs; i++) {
+						struct Player *chr = &_chrsOnline[i];
+						printf("X        -> %d\n", chr->x);
+						printf("Y        -> %d\n", chr->y);
+						printf("ID       -> %d\n", chr->id);
+						printf("Node     -> %d\n", chr->node);
+						printf("State    -> %d\n", chr->state);
+						printf("Count    -> %d\n\n", chr->count);
+					}
+
+					return 0x02;
+				} else return 0x01;
+			}
 		} break;
 		case 0xFF: {
-			// NOTE: set the retCode
+			// NOTE: requesting for all the players on my node (including myself!)
+			uint8_t flag = 0x0B;
+			UDPpacket packet = {};
+
+			packet.len = 1;
+			packet.maxlen = 1;
+			packet.data = &flag;
+
+			if(!SDLNet_UDP_Send(clientFD, serverChannel, &packet))
+				fprintf(stderr, "SDLNet_UDP_Send: %s\n", SDLNet_GetError());
+
+			// NOTE: set the retCode and wait for a reply
 			return 0x00;
 		} break;
 	}
@@ -277,64 +422,4 @@ if(!SDLNet_UDP_Send(clientFD, serverChannel, &packet))
 	fprintf(stderr, "SDLNet_UDP_Send: %s\n", SDLNet_GetError());
 
 free(packet.data);
-*/
-
-/*
-void networkPoll(void) {
-	// NOTE: check packet for a connection
-	if(SDLNet_CheckSockets(socketSet, 0)==-1) {
-		fprintf(stderr, "SDLNet_CheckSockets: %s\n", SDLNet_GetError());
-		return;
-	}
-
-	if(SDLNet_SocketReady(clientFD)) {
-		// NOTE: setup a packet which is big enough to store any server message
-		UDPpacket packet;
-
-		// NOTE: allocate space for packet
-		packet.maxlen = 0xAA; // 170 bytes
-		packet.data = (uint8_t *)malloc(0xAA);
-
-		// NOTE: get packet
-		int recv = SDLNet_UDP_Recv(clientFD, &packet);
-		if(!recv) {
-			free(packet.data);
-			return;
-		}
-
-		// NOTE: display IPaddress infomation
-		Uint32 ipaddr = SDL_SwapBE32(packet.address.host);
-		printf("packet from-> %d.%d.%d.%d:%d bound to channel %d\n",
-			ipaddr>>24, (ipaddr>>16)&0xFF, (ipaddr>>8)&0xFF, ipaddr&0xFF,
-			SDL_SwapBE16(packet.address.port), packet.channel);
-
-		// NOTE: if it isn't the server then ignore it
-		if(packet.channel!=serverChannel) {
-			free(packet.data);
-			return;
-		}
-
-		// NOTE: read the flag for packet identity
-		uint8_t flag;
-
-		memcpy(&flag, packet.data, 1);
-		uint8_t offset = 1;
-
-		// NOTE: process the packet
-		switch(flag) {
-			case 0x01: {
-				printf("Incorrect password.\n");
-			} break;
-			case 0x02: {
-				printf("Account in use.");
-			} break;
-			case 0x03: {
-				printf("Login success!\n");
-			} break;
-		}
-
-		// NOTE: free the packet
-		free(packet.data);
-	}
-}
 */
