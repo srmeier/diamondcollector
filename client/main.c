@@ -164,7 +164,6 @@ int main(int argc, char *argv[]) {
 						printf("\nlogin success\n");
 
 						// NOTE: the other mainChr variables are set by server
-						mainChr.state = 0x01; // true idle
 						mainChr.username = username;
 						mainChr.password = password;
 
@@ -200,8 +199,14 @@ int main(int argc, char *argv[]) {
 					} break;
 					case 0x02: {
 						// NOTE: we got all the players and everything...
+						clearInput();
+						retCode = 0xFF;
+						gameState = 0x03;
 					} break;
 				}
+			} break;
+			case 0x03: {
+				// NOTE: any 0x04 packets at this point are new players
 			} break;
 			case 0xFF: {
 				if(mainChr.state) {
@@ -237,158 +242,6 @@ int main(int argc, char *argv[]) {
 	libQuit();
 
 	return 0;
-}
-
-//-----------------------------------------------------------------------------
-uint8_t getChrsOnline(struct Player **chrsOnline, uint8_t *numChrs, uint8_t retCode) {
-	// NOTE: get chrsOnline for a particular Node
-	static uint8_t curChr = 0;
-	static uint8_t _numChrs = 0;
-	struct Player *_chrsOnline = *chrsOnline;
-
-	// NOTE: switch based on retCode
-	switch(retCode) {
-		case 0x00: {
-			// NOTE: check for connections
-			if(SDLNet_CheckSockets(socketSet, 0)==-1) {
-				fprintf(stderr, "SDLNet_CheckSockets: %s\n", SDLNet_GetError());
-				return;
-			}
-
-			if(SDLNet_SocketReady(clientFD)) {
-				// NOTE: here we simply get how many players the server is going to send
-				UDPpacket packet;
-
-				// NOTE: allocate space for packet
-				packet.maxlen = 0x01;
-				packet.data = (uint8_t *)malloc(0x01);
-
-				// NOTE: get packet
-				int recv = SDLNet_UDP_Recv(clientFD, &packet);
-				if(!recv) {
-					free(packet.data);
-					return;
-				}
-
-				// NOTE: if it isn't the server then ignore it
-				if(packet.channel!=serverChannel) {
-					free(packet.data);
-					return;
-				}
-
-				// NOTE: on a successful flag set the numChrs
-				memcpy(&_numChrs, packet.data, 1);
-				*numChrs = _numChrs;
-
-				printf("receiving %d players.\n", _numChrs);
-				_chrsOnline = (struct Player *)malloc(_numChrs*sizeof(struct Player));
-				// TODO: remember to free this sometime
-
-				// NOTE: set the returning Player pointer
-				*chrsOnline = _chrsOnline;
-
-				// NOTE: free the packet
-				free(packet.data);
-
-				// NOTE: set the retCode
-				return 0x01;
-			}
-		} break;
-		case 0x01: {
-			// NOTE: check for connections
-			if(SDLNet_CheckSockets(socketSet, 0)==-1) {
-				fprintf(stderr, "SDLNet_CheckSockets: %s\n", SDLNet_GetError());
-				return;
-			}
-
-			if(SDLNet_SocketReady(clientFD)) {
-				// NOTE: get the incoming players
-				UDPpacket packet;
-
-				// NOTE: allocate space for packet
-				packet.maxlen = 0x18;
-				packet.data = (uint8_t *)malloc(0x18);
-
-				/*
-				- state        ( 4)
-				- PlayerID     ( 4)
-				- Node         ( 4)
-				- X            ( 4)
-				- Y            ( 4)
-				- DiamondCount ( 4)
-				============== (24)
-				*/
-
-				// NOTE: get packet
-				int recv = SDLNet_UDP_Recv(clientFD, &packet);
-				if(!recv) {
-					free(packet.data);
-					return;
-				}
-
-				// NOTE: if it isn't the server then ignore it
-				if(packet.channel!=serverChannel) {
-					free(packet.data);
-					return;
-				}
-
-				// NOTE: get the space for player
-				uint8_t offset = 0;
-				struct Player *chr = &_chrsOnline[curChr];
-
-				memcpy(&chr->state, packet.data+offset, 4);
-				offset += 4;
-				memcpy(&chr->id, packet.data+offset, 4);
-				offset += 4;
-				memcpy(&chr->node, packet.data+offset, 4);
-				offset += 4;
-				memcpy(&chr->x, packet.data+offset, 4);
-				offset += 4;
-				memcpy(&chr->y, packet.data+offset, 4);
-				offset += 4;
-				memcpy(&chr->count, packet.data+offset, 4);
-				offset += 4;
-
-				// NOTE: set the returning Player pointer
-				*chrsOnline = _chrsOnline;
-
-				// NOTE: free the packet
-				free(packet.data);
-
-				if(++curChr>=_numChrs) {
-					printf("got it all!\n\n");
-
-					int i;
-					for(i=0; i<_numChrs; i++) {
-						struct Player *chr = &_chrsOnline[i];
-						printf("X        -> %d\n", chr->x);
-						printf("Y        -> %d\n", chr->y);
-						printf("ID       -> %d\n", chr->id);
-						printf("Node     -> %d\n", chr->node);
-						printf("State    -> %d\n", chr->state);
-						printf("Count    -> %d\n\n", chr->count);
-					}
-
-					return 0x02;
-				} else return 0x01;
-			}
-		} break;
-		case 0xFF: {
-			// NOTE: requesting for all the players on my node (including myself!)
-			uint8_t flag = 0x0B;
-			UDPpacket packet = {};
-
-			packet.len = 1;
-			packet.maxlen = 1;
-			packet.data = &flag;
-
-			if(!SDLNet_UDP_Send(clientFD, serverChannel, &packet))
-				fprintf(stderr, "SDLNet_UDP_Send: %s\n", SDLNet_GetError());
-
-			// NOTE: set the retCode and wait for a reply
-			return 0x00;
-		} break;
-	}
 }
 
 //-----------------------------------------------------------------------------

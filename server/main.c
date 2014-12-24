@@ -161,21 +161,24 @@ int main(int argc, char *argv[]) {
 
 								/*
 								- flag         ( 1)
+								- State        ( 4)
 								- PlayerID     ( 4)
 								- Node         ( 4)
 								- X            ( 4)
 								- Y            ( 4)
 								- DiamondCount ( 4)
-								============== (21)
+								============== (25)
 								*/
 
-								sPacket.maxlen = 0x15; // 21 bytes
-								sPacket.data = (uint8_t *)malloc(0x15);
+								sPacket.maxlen = 0x19; // 25 bytes
+								sPacket.data = (uint8_t *)malloc(0x19);
 
 								uint8_t offset = 0;
 
 								memset(sPacket.data+offset, 0x03, 1);
 								offset += 1;
+								memcpy(sPacket.data+offset, &chr.state, 4);
+								offset += 4;
 								memcpy(sPacket.data+offset, &chr.id, 4);
 								offset += 4;
 								memcpy(sPacket.data+offset, &chr.node, 4);
@@ -190,10 +193,19 @@ int main(int argc, char *argv[]) {
 								sPacket.len = offset;
 								sPacket.address = packet.address;
 
+								// TODO: will have to check if Node is full...
 								if(!SDLNet_UDP_Send(serverFD, -1, &sPacket))
 									fprintf(stderr, "SDLNet_UDP_Send: %s\n", SDLNet_GetError());
 
-								// TODO: will have to check if Node is full...
+								// NOTE: set flag to 0x04 so everyone else on the node will hear about
+								// the new player connection (the player won't hear this because they
+								// aren't on the channel yet)
+								memset(sPacket.data, 0x04, 1);
+
+								if(!SDLNet_UDP_Send(serverFD, chr.node, &sPacket))
+									fprintf(stderr, "SDLNet_UDP_Send: %s\n", SDLNet_GetError());
+
+
 								// NOTE: binding the client to the channel corresponding to the
 								// node they are on (maximum of 4 players per node with 32 nodes)
 								int channel = SDLNet_UDP_Bind(serverFD, chr.node, &packet.address);

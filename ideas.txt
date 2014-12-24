@@ -99,6 +99,7 @@ decline
 0x01 = incorrectPassword
 0x02 = accountInUse
 0x03 = loginSuccess
+0x04 = newPlayerConnection
 
 // reserved for client side flags
 0x00 = waitingForServer
