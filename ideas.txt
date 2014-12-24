@@ -81,7 +81,7 @@ decline
 - getX, getY, getNode, and getDiamondCount are more for debugging since they
 	don't check to see if the player is online
 
-/* ClientPacketFlags
+/* Client2ServerPacketFlags
 0x01 = login
 0x02 = logout
 0x03 = getX
@@ -98,6 +98,10 @@ decline
 0x01 = incorrectPassword
 0x02 = accountInUse
 0x03 = loginSuccess
+
+// reserved for client side flags
+0x00 = waitingForServer
+0xFF = clientInitPacket
 */
 
 - accept and decline are sent back to the server but never out to other players

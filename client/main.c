@@ -18,16 +18,25 @@ gcc main.c -o client.exe -I./include -L./lib -lmingw32 -lSDL2main -lSDL2 -lSDL2_
 #define SCREEN_NAME "Prototype"
 #define SCREEN_SCALE 3
 
+/* NOTE: engine variables */
 //-----------------------------------------------------------------------------
+SDL_bool aChk;
+SDL_bool bChk;
+SDL_bool upChk;
+SDL_bool downChk;
+SDL_bool leftChk;
+SDL_bool rightChk;
+
 SDL_bool aBnt;
 SDL_bool bBnt;
-int gameState;
 SDL_bool upBnt;
-TTF_Font *font8;
 SDL_bool downBnt;
 SDL_bool leftBnt;
-SDL_bool running;
 SDL_bool rightBnt;
+
+int gameState;
+TTF_Font *font8;
+SDL_bool running;
 int serverChannel;
 IPaddress serverIp;
 UDPsocket clientFD;
@@ -37,9 +46,21 @@ SDL_Renderer *renderer;
 SDLNet_SocketSet socketSet;
 SDL_Surface *spritesheet[NUM_SPRITES];
 
+/* NOTE: engine includes */
 //-----------------------------------------------------------------------------
 #include "types.h"
 #include "engine.h"
+
+/* NOTE: instance variables */
+//-----------------------------------------------------------------------------
+struct Player mainChr;
+
+/* NOTE: instance includes */
+//-----------------------------------------------------------------------------
+#include "login.h"
+
+//-----------------------------------------------------------------------------
+
 
 //-----------------------------------------------------------------------------
 void inputPoll(void);
@@ -53,24 +74,15 @@ int main(int argc, char *argv[]) {
 	
 	/* === */
 
-	SDL_bool curUnEdit = SDL_TRUE;
-
-	int unSize = 1;
+	uint32_t unSize = 1;
 	char *username = (char *)malloc(unSize+1);
 	username[unSize-1] = 0x41;
 	username[unSize] = 0x00;
 
-	int pwSize = 1;
+	uint32_t pwSize = 1;
 	char *password = (char *)malloc(pwSize+1);
 	password[pwSize-1] = 0x41;
 	password[pwSize] = 0x00;
-
-	SDL_bool aChk = SDL_FALSE;
-	SDL_bool bChk = SDL_FALSE;
-	SDL_bool upChk = SDL_FALSE;
-	SDL_bool downChk = SDL_FALSE;
-	SDL_bool leftChk = SDL_FALSE;
-	SDL_bool rightChk = SDL_FALSE;
 
 	/* === */
 
@@ -86,95 +98,70 @@ int main(int argc, char *argv[]) {
 
 		switch(gameState) {
 			case 0x00: {
-				// NOTE: get the username from the player
-				if(upBnt && !upChk) {
-					if(curUnEdit) {
-						username[unSize-1]++;
-						if(username[unSize-1]==0x5B)
-							username[unSize-1] = 0x41;
-					} else {
-						password[pwSize-1]++;
-						if(password[pwSize-1]==0x5B)
-							password[pwSize-1] = 0x41;
-					}
-					upChk = SDL_TRUE;
-				} else if(!upBnt) upChk = SDL_FALSE;
+				// NOTE: get the players login information
+				if(getPlayerLoginInfo(&username, &unSize, &password, &pwSize)) {
+					printf("Username: %s (%d)\n", username, unSize);
+					printf("Password: %s (%d)\n", password, pwSize);
 
-				if(downBnt && !downChk) {
-					if(curUnEdit) {
-						username[unSize-1]--;
-						if(username[unSize-1]==0x40)
-							username[unSize-1] = 0x5A;
-					} else {
-						password[pwSize-1]--;
-						if(password[pwSize-1]==0x40)
-							password[pwSize-1] = 0x5A;
-					}
-					downChk = SDL_TRUE;
-				} else if(!downBnt) downChk = SDL_FALSE;
-
-				if(leftBnt && !leftChk && (unSize-1)>0) {
-					if(curUnEdit) {
-						username = (char *)realloc(username, --unSize+1);
-						username[unSize] = 0x00;
-					} else {
-						password = (char *)realloc(password, --pwSize+1);
-						password[pwSize] = 0x00;
-					}
-					leftChk = SDL_TRUE;
-				} else if(!leftBnt) leftChk = SDL_FALSE;
-
-				if(rightBnt && !rightChk && (unSize+1)<12) {
-					if(curUnEdit) {
-						username = (char *)realloc(username, ++unSize+1);
-						username[unSize-1] = 0x41;
-						username[unSize] = 0x00;
-					} else {
-						password = (char *)realloc(password, ++pwSize+1);
-						password[pwSize-1] = 0x41;
-						password[pwSize] = 0x00;
-					}
-					rightChk = SDL_TRUE;
-				} else if(!rightBnt) rightChk = SDL_FALSE;
-
-				if(aBnt && !aChk) {
-					if(curUnEdit) {
-						curUnEdit = SDL_FALSE;
-					} else curUnEdit = SDL_TRUE;
-					aChk = SDL_TRUE;
-				} else if(!aBnt) aChk = SDL_FALSE;
-
-				if(bBnt && !bChk) {
-					printf("accept the info?\n");
-					bChk = SDL_TRUE;
-				} else if(!bBnt) bChk = SDL_FALSE;
-
-				SDL_Color color0 = {0x73, 0x73, 0x73, 0x00};
-				SDL_Color color1 = {0xFF, 0xFF, 0xFF, 0x00};
-				SDL_Color color2 = {0xFF, 0x00, 0x00, 0x00};
-
-				char *str0 = "Username:";
-				drawText(str0, color0, 0, 0);
-				drawText(username, color1, 8*9, 0);
-
-				char *str1 = "Password:";
-				drawText(str1, color0, 0, 16);
-				drawText(password, color1, 8*9, 16);
-
-				if(curUnEdit)
-					drawText(&username[unSize-1], color2, 8*9+8*(unSize-1), 0);
-				else
-					drawText(&password[pwSize-1], color2, 8*9+8*(pwSize-1), 16);
+					clearInput();
+					gameState = 0x01;
+				}
 			} break;
 			case 0x01: {
-				// NOTE: get the password from the player
+				// NOTE: connect the player with the information they provide
+				struct loginPacket p = {
+					username, password,
+					unSize, pwSize
+				};
+
+				static uint8_t retCode = 0xFF;
+				retCode = playerLogin(&p, retCode);
+
+				switch(retCode) {
+					case 0x00: {
+						// NOTE: diaplay a connecting message and poll for the server response
+						SDL_Color color0 = {0x73, 0x73, 0x73, 0x00};
+
+						char *str0 = "Connecting...";
+						drawText(str0, color0, 0, 0);
+					} break;
+					case 0x01: {
+						// NOTE: incorrect password
+						SDL_Color color0 = {0x73, 0x73, 0x73, 0x00};
+
+						char *str0 = "Incorrect username or password.";
+						drawText(str0, color0, 0, 0);
+
+						// NOTE: allow player to back out to correct username/password
+						if(bBnt && !bChk) {
+							clearInput();
+							gameState = 0x00;
+						} else if(!bBnt) bChk = SDL_FALSE;
+					} break;
+					case 0x02: {
+						// NOTE: account in use
+						printf("account in use\n");
+					} break;
+					case 0x03: {
+						// NOTE: login success
+						printf("login success\n");
+					} break;
+				}
 			} break;
 			case 0x02: {
-				// NOTE: show the connecting screen while the logging in
-				// the server will send all the current players that are online
-			} break;
-			case 0x03: {
 				// NOTE: display the game state
+			} break;
+			case 0xFF: {
+				if(mainChr.state) {
+					// NOTE: logout over network
+					SDL_Color color0 = {0x73, 0x73, 0x73, 0x00};
+
+					char *str0 = "Logging out...";
+					drawText(str0, color0, 0, 0);
+
+					// NOTE: if the retCode from server is good then close the game
+					running = SDL_FALSE;
+				} else running = SDL_FALSE;
 			} break;
 		}
 
@@ -201,6 +188,38 @@ int main(int argc, char *argv[]) {
 }
 
 //-----------------------------------------------------------------------------
+/*
+// NOTE: send logout packet
+memset(&packet, 0, sizeof(packet));
+
+unSize = strlen(argv[1]);
+pwSize = strlen(argv[2]);
+
+packet.maxlen = 1+4+unSize+4+pwSize;
+packet.data = (uint8_t *)malloc(packet.maxlen);
+
+offset = 0;
+
+memset(packet.data+offset, 0x02, 1);
+offset += 1;
+memcpy(packet.data+offset, &unSize, 4);
+offset += 4;
+memcpy(packet.data+offset, argv[1], unSize);
+offset += unSize;
+memcpy(packet.data+offset, &pwSize, 4);
+offset += 4;
+memcpy(packet.data+offset, argv[2], pwSize);
+offset += pwSize;
+
+packet.len = offset;
+
+// NOTE: SDLNet_UDP_Send returns the number of people the packet was sent to
+if(!SDLNet_UDP_Send(clientFD, serverChannel, &packet))
+	fprintf(stderr, "SDLNet_UDP_Send: %s\n", SDLNet_GetError());
+
+free(packet.data);
+*/
+
 /*
 void networkPoll(void) {
 	// NOTE: check packet for a connection
@@ -259,78 +278,4 @@ void networkPoll(void) {
 		free(packet.data);
 	}
 }
-*/
-
-/*
-// NOTE: build login packet (temp)
-if(argc<3) {
-	fprintf(stderr, "Error: incorrect number of arguements.\n");
-
-	gfxQuit();
-	netQuit();
-	libQuit();
-
-	return -1;
-}
-
-UDPpacket packet = {};
-
-uint32_t unSize = strlen(argv[1]);
-uint32_t pwSize = strlen(argv[2]);
-
-packet.maxlen = 1+4+unSize+4+pwSize;
-packet.data = (uint8_t *)malloc(packet.maxlen);
-
-uint8_t offset = 0;
-
-memset(packet.data+offset, 0x01, 1);
-offset += 1;
-memcpy(packet.data+offset, &unSize, 4);
-offset += 4;
-memcpy(packet.data+offset, argv[1], unSize);
-offset += unSize;
-memcpy(packet.data+offset, &pwSize, 4);
-offset += 4;
-memcpy(packet.data+offset, argv[2], pwSize);
-offset += pwSize;
-
-packet.len = offset;
-
-// NOTE: SDLNet_UDP_Send returns the number of people the packet was sent to
-if(!SDLNet_UDP_Send(clientFD, serverChannel, &packet))
-	fprintf(stderr, "SDLNet_UDP_Send: %s\n", SDLNet_GetError());
-
-free(packet.data);
-*/
-
-/*
-// NOTE: send logout packet
-memset(&packet, 0, sizeof(packet));
-
-unSize = strlen(argv[1]);
-pwSize = strlen(argv[2]);
-
-packet.maxlen = 1+4+unSize+4+pwSize;
-packet.data = (uint8_t *)malloc(packet.maxlen);
-
-offset = 0;
-
-memset(packet.data+offset, 0x02, 1);
-offset += 1;
-memcpy(packet.data+offset, &unSize, 4);
-offset += 4;
-memcpy(packet.data+offset, argv[1], unSize);
-offset += unSize;
-memcpy(packet.data+offset, &pwSize, 4);
-offset += 4;
-memcpy(packet.data+offset, argv[2], pwSize);
-offset += pwSize;
-
-packet.len = offset;
-
-// NOTE: SDLNet_UDP_Send returns the number of people the packet was sent to
-if(!SDLNet_UDP_Send(clientFD, serverChannel, &packet))
-	fprintf(stderr, "SDLNet_UDP_Send: %s\n", SDLNet_GetError());
-
-free(packet.data);
 */

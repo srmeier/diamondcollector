@@ -208,11 +208,11 @@ void inputPoll(void) {
 	while(SDL_PollEvent(&event)) {
 		switch(event.type) {
 			case SDL_QUIT: {
-				running = SDL_FALSE;
+				gameState = 0xFF;
 			} break;
 			case SDL_KEYDOWN: {
 				switch(event.key.keysym.sym) {
-					case SDLK_ESCAPE: running = SDL_FALSE; break;
+					case SDLK_ESCAPE: gameState = 0xFF; break;
 					case SDLK_UP: upBnt = SDL_TRUE; break;
 					case SDLK_DOWN: downBnt = SDL_TRUE; break;
 					case SDLK_LEFT: leftBnt = SDL_TRUE; break;
@@ -233,6 +233,23 @@ void inputPoll(void) {
 			} break;
 		}
 	}
+}
+
+//-----------------------------------------------------------------------------
+void clearInput(void) {
+	aChk = SDL_FALSE;
+	bChk = SDL_FALSE;
+	upChk = SDL_FALSE;
+	downChk = SDL_FALSE;
+	leftChk = SDL_FALSE;
+	rightChk = SDL_FALSE;
+
+	aBnt = SDL_FALSE;
+	bBnt = SDL_FALSE;
+	upBnt = SDL_FALSE;
+	downBnt = SDL_FALSE;
+	leftBnt = SDL_FALSE;
+	rightBnt = SDL_FALSE;
 }
 
 #endif
