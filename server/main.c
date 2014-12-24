@@ -202,8 +202,11 @@ int main(int argc, char *argv[]) {
 								// aren't on the channel yet)
 								memset(sPacket.data, 0x04, 1);
 
-								if(!SDLNet_UDP_Send(serverFD, chr.node, &sPacket))
-									fprintf(stderr, "SDLNet_UDP_Send: %s\n", SDLNet_GetError());
+								if(!SDLNet_UDP_Send(serverFD, chr.node, &sPacket)) {
+									// NOTE: could just be that there is no one on the channel
+									if(strcmp(SDLNet_GetError(), ""))
+										fprintf(stderr, "SDLNet_UDP_Send: %s\n", SDLNet_GetError());
+								}
 
 
 								// NOTE: binding the client to the channel corresponding to the

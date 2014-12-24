@@ -257,7 +257,7 @@ uint8_t getChrsOnline(struct Player **chrsOnline, uint8_t *numChrs, uint8_t retC
 
 				printf("receiving %d players.\n", _numChrs);
 				_chrsOnline = (struct Player *)malloc(_numChrs*sizeof(struct Player));
-				// TODO: remember to free this sometime
+				memset(_chrsOnline, 0x00, _numChrs*sizeof(struct Player));
 
 				// NOTE: set the returning Player pointer
 				*chrsOnline = _chrsOnline;

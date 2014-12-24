@@ -20,7 +20,7 @@ gcc main.c -o client.exe -I./include -L./lib -lmingw32 -lSDL2main -lSDL2 -lSDL2_
 #define SCREEN_H 240 // 30 -> 15
 #define NUM_SPRITES 1025
 #define SCREEN_NAME "Prototype"
-#define SCREEN_SCALE 3
+#define SCREEN_SCALE 1
 
 /* NOTE: engine variables */
 //-----------------------------------------------------------------------------
@@ -66,11 +66,10 @@ struct Player *chrsOnline;
 #include "login.h"
 
 //-----------------------------------------------------------------------------
-uint8_t getChrsOnline(struct Player **chrsOnline, uint8_t *numChrs, uint8_t retCode);
+void networkPoll(void);
 
 //-----------------------------------------------------------------------------
 void inputPoll(void);
-void networkPoll(void);
 
 //-----------------------------------------------------------------------------
 int main(int argc, char *argv[]) {
@@ -79,6 +78,11 @@ int main(int argc, char *argv[]) {
 	gfxInit();
 	
 	/* === */
+
+	int testInds[4] = {
+		 1,  2,
+		33, 34
+	}; SDL_Surface *test = buildSprite(2, 2, testInds);
 
 	uint32_t unSize = 1;
 	char *username = (char *)malloc(unSize+1);
@@ -206,7 +210,24 @@ int main(int argc, char *argv[]) {
 				}
 			} break;
 			case 0x03: {
+				/*
+				*/
+
+				// NOTE: main game loop
+				networkPoll();
+
 				// NOTE: any 0x04 packets at this point are new players
+				int i;
+				for(i=0; i<numChrs; i++) {
+					// NOTE: the mainChr is in this array as well
+					struct Player chr = chrsOnline[i];
+
+					SDL_Rect rect = {8*2*chr.x, 8*2*chr.y, 8*2, 8*2};
+					SDL_BlitSurface(test, NULL, screen, &rect);
+				}
+
+				/*
+				*/
 			} break;
 			case 0xFF: {
 				if(mainChr.state) {
@@ -232,8 +253,14 @@ int main(int argc, char *argv[]) {
 
 	/* === */
 
-	free(username);
-	free(password);
+	int i;
+	for(i=0; i<numChrs; i++) {
+		// NOTE: this runs over client also
+		free(chrsOnline[i].username);
+		free(chrsOnline[i].password);
+	} free(chrsOnline);
+
+	SDL_FreeSurface(test);
 
 	/* === */
 
@@ -242,6 +269,87 @@ int main(int argc, char *argv[]) {
 	libQuit();
 
 	return 0;
+}
+
+//-----------------------------------------------------------------------------
+void networkPoll(void) {
+	// NOTE: check for connections
+	if(SDLNet_CheckSockets(socketSet, 0)==-1) {
+		fprintf(stderr, "SDLNet_CheckSockets: %s\n", SDLNet_GetError());
+		return;
+	}
+
+	if(SDLNet_SocketReady(clientFD)) {
+		// NOTE: here we simply get how many players the server is going to send
+		UDPpacket packet;
+
+		// NOTE: allocate space for packet
+		packet.maxlen = 0xAA; // 170 bytes
+		packet.data = (uint8_t *)malloc(0xAA);
+
+		// NOTE: get packet
+		int recv = SDLNet_UDP_Recv(clientFD, &packet);
+		if(!recv) {
+			free(packet.data);
+			return;
+		}
+
+		// NOTE: if it isn't the server then ignore it
+		if(packet.channel!=serverChannel) {
+			free(packet.data);
+			return;
+		}
+
+		// NOTE: read the flag for packet identity
+		uint8_t flag = 0;
+		uint8_t offset = 0;
+
+		memcpy(&flag, packet.data, 1);
+		offset += 1;
+
+		switch(flag) {
+			case 0x04: {
+				// NOTE: new player connection
+				/*
+				- flag         ( 1)
+				- State        ( 4)
+				- PlayerID     ( 4)
+				- Node         ( 4)
+				- X            ( 4)
+				- Y            ( 4)
+				- DiamondCount ( 4)
+				============== (25)
+				*/
+
+				struct Player tempPlayers[numChrs];
+				memcpy(tempPlayers, chrsOnline, numChrs*sizeof(struct Player));
+
+				chrsOnline = (struct Player *)realloc(chrsOnline, ++numChrs*sizeof(struct Player));
+				memset(chrsOnline, 0x00, numChrs*sizeof(struct Player));
+
+				int i;
+				for(i=0; i<(numChrs-1); i++)
+					memcpy(&chrsOnline[i], &tempPlayers[i], sizeof(struct Player));
+				struct Player *chr = &chrsOnline[numChrs-1];
+
+				memcpy(&chr->state, packet.data+offset, 4);
+				offset += 4;
+				memcpy(&chr->id, packet.data+offset, 4);
+				offset += 4;
+				memcpy(&chr->node, packet.data+offset, 4);
+				offset += 4;
+				memcpy(&chr->x, packet.data+offset, 4);
+				offset += 4;
+				memcpy(&chr->y, packet.data+offset, 4);
+				offset += 4;
+				memcpy(&chr->count, packet.data+offset, 4);
+				offset += 4;
+			} break;
+		}
+
+		// NOTE: free the packet
+		free(packet.data);
+	}
 }
 
 //-----------------------------------------------------------------------------
