@@ -117,8 +117,8 @@ uint8_t playerLogin(struct loginPacket *p, uint8_t retCode) {
 				UDPpacket packet;
 
 				// NOTE: allocate space for packet
-				packet.maxlen = 0x01; // 170 bytes
-				packet.data = (uint8_t *)malloc(0x01);
+				packet.maxlen = 0x15; // 21 bytes
+				packet.data = (uint8_t *)malloc(0x15);
 
 				// NOTE: get packet
 				int recv = SDLNet_UDP_Recv(clientFD, &packet);
@@ -139,8 +139,37 @@ uint8_t playerLogin(struct loginPacket *p, uint8_t retCode) {
 					return;
 				}
 
-				// NOTE: just need the first byte which is the flag
-				uint8_t flag = (uint8_t) *packet.data;
+				// NOTE: on a successful flag set the mainChr
+				uint8_t flag;
+				uint32_t unSize;
+
+				uint8_t offset = 0;
+
+				/*
+				- flag         ( 1)
+				- PlayerID     ( 4)
+				- Node         ( 4)
+				- X            ( 4)
+				- Y            ( 4)
+				- DiamondCount ( 4)
+				============== (21)
+				*/
+
+				memcpy(&flag, packet.data+offset, 1);
+				offset += 1;
+
+				if(flag==0x03) {
+					// NOTE: login success - get the rest of the packet
+					memcpy(&mainChr.id, packet.data+offset, 4);
+					offset += 4;
+					memcpy(&mainChr.node, packet.data+offset, 4);
+					offset += 4;
+					memcpy(&mainChr.x, packet.data+offset, 4);
+					offset += 4;
+					memcpy(&mainChr.y, packet.data+offset, 4);
+					offset += 4;
+					memcpy(&mainChr.count, packet.data+offset, 4);
+				}
 
 				// NOTE: free the packet
 				free(packet.data);

@@ -159,6 +159,12 @@ int main(int argc, char *argv[]) {
 					case 0x03: {
 						// NOTE: login success
 						printf("login success\n");
+
+						// NOTE: the other mainChr variables are set by server
+						mainChr.state = 0x01; // true idle
+						mainChr.username = username;
+						mainChr.password = password;
+
 						gameState = 0x02;
 					} break;
 				}
@@ -166,6 +172,17 @@ int main(int argc, char *argv[]) {
 			case 0x02: {
 				// NOTE: login was a success so now we need to get all the current players info
 				static uint8_t retCode = 0xFF;
+				if(retCode==0xFF) {
+					printf("X        -> %d\n", mainChr.x);
+					printf("Y        -> %d\n", mainChr.y);
+					printf("ID       -> %d\n", mainChr.id);
+					printf("Node     -> %d\n", mainChr.node);
+					printf("Username -> %s\n", mainChr.username);
+					printf("Password -> %s\n", mainChr.password);
+					printf("State    -> %d\n", mainChr.state);
+					printf("Count    -> %d\n", mainChr.count);
+				}
+
 				retCode = getChrsOnline(&chrsOnline, retCode);
 
 				switch(retCode) {
