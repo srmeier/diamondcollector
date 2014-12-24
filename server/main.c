@@ -59,9 +59,13 @@ int main(int argc, char *argv[]) {
 	SDLNet_UDP_AddSocket(socketSet, serverFD);
 	printf("\nServer open on port: %d\n\n", 3490);
 
+	/*
+		LISTEN FOR PACKETS
+	*/
+
 	for(;;) {
 		// NOTE: wait for a connection
-		int n = SDLNet_CheckSockets(socketSet, -1);
+		int n = SDLNet_CheckSockets(socketSet, 0);
 
 		if(n==-1) {
 			fprintf(stderr, "SDLNet_CheckSockets: %s\n", SDLNet_GetError());

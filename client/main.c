@@ -14,33 +14,36 @@ gcc main.c -o client.exe -I./include -L./lib -lmingw32 -lSDL2main -lSDL2 -lSDL2_
 //-----------------------------------------------------------------------------
 #define SCREEN_W 320 // 40 -> 20
 #define SCREEN_H 240 // 30 -> 15
-#define NUM_SPRITES 0
+#define NUM_SPRITES 1025
 #define SCREEN_NAME "Prototype"
-#define SCREEN_SCALE 2
+#define SCREEN_SCALE 3
 
 //-----------------------------------------------------------------------------
+SDL_bool aBnt;
+SDL_bool bBnt;
+int gameState;
+SDL_bool upBnt;
+TTF_Font *font8;
+SDL_bool downBnt;
+SDL_bool leftBnt;
+SDL_bool running;
+SDL_bool rightBnt;
 int serverChannel;
 IPaddress serverIp;
 UDPsocket clientFD;
-SDLNet_SocketSet socketSet;
-
-SDL_bool running;
 SDL_Window *window;
 SDL_Surface *screen;
 SDL_Renderer *renderer;
+SDLNet_SocketSet socketSet;
+SDL_Surface *spritesheet[NUM_SPRITES];
+
+//-----------------------------------------------------------------------------
+#include "types.h"
+#include "engine.h"
 
 //-----------------------------------------------------------------------------
 void inputPoll(void);
 void networkPoll(void);
-
-//-----------------------------------------------------------------------------
-void libInit(void);
-void netInit(void);
-void gfxInit(void);
-
-void libQuit(void);
-void netQuit(void);
-void gfxQuit(void);
 
 //-----------------------------------------------------------------------------
 int main(int argc, char *argv[]) {
@@ -50,51 +53,24 @@ int main(int argc, char *argv[]) {
 	
 	/* === */
 
-	running = SDL_TRUE;
+	SDL_bool curUnEdit = SDL_TRUE;
 
-	// NOTE: build login packet (temp)
-	if(argc<3) {
-		fprintf(stderr, "Error: incorrect number of arguements.\n");
+	int unSize = 1;
+	char *username = (char *)malloc(unSize+1);
+	username[unSize-1] = 0x41;
+	username[unSize] = 0x00;
 
-		gfxQuit();
-		netQuit();
-		libQuit();
+	int pwSize = 1;
+	char *password = (char *)malloc(pwSize+1);
+	password[pwSize-1] = 0x41;
+	password[pwSize] = 0x00;
 
-		return -1;
-	}
-
-	UDPpacket packet = {};
-
-	uint32_t unSize = strlen(argv[1]);
-	uint32_t pwSize = strlen(argv[2]);
-
-	packet.maxlen = 1+4+unSize+4+pwSize;
-	packet.data = (uint8_t *)malloc(packet.maxlen);
-
-	uint8_t offset = 0;
-
-	memset(packet.data+offset, 0x01, 1);
-	offset += 1;
-	memcpy(packet.data+offset, &unSize, 4);
-	offset += 4;
-	memcpy(packet.data+offset, argv[1], unSize);
-	offset += unSize;
-	memcpy(packet.data+offset, &pwSize, 4);
-	offset += 4;
-	memcpy(packet.data+offset, argv[2], pwSize);
-	offset += pwSize;
-
-	packet.len = offset;
-
-	// NOTE: SDLNet_UDP_Send returns the number of people the packet was sent to
-	if(!SDLNet_UDP_Send(clientFD, serverChannel, &packet))
-		fprintf(stderr, "SDLNet_UDP_Send: %s\n", SDLNet_GetError());
-
-	free(packet.data);
-
-	// NOTE: setup the socketset
-	socketSet = SDLNet_AllocSocketSet(1);
-	SDLNet_UDP_AddSocket(socketSet, clientFD);
+	SDL_bool aChk = SDL_FALSE;
+	SDL_bool bChk = SDL_FALSE;
+	SDL_bool upChk = SDL_FALSE;
+	SDL_bool downChk = SDL_FALSE;
+	SDL_bool leftChk = SDL_FALSE;
+	SDL_bool rightChk = SDL_FALSE;
 
 	/* === */
 
@@ -105,55 +81,115 @@ int main(int argc, char *argv[]) {
 		/* === */
 
 		inputPoll();
-		networkPoll();
 
 		/* === */
 
+		switch(gameState) {
+			case 0x00: {
+				// NOTE: get the username from the player
+				if(upBnt && !upChk) {
+					if(curUnEdit) {
+						username[unSize-1]++;
+						if(username[unSize-1]==0x5B)
+							username[unSize-1] = 0x41;
+					} else {
+						password[pwSize-1]++;
+						if(password[pwSize-1]==0x5B)
+							password[pwSize-1] = 0x41;
+					}
+					upChk = SDL_TRUE;
+				} else if(!upBnt) upChk = SDL_FALSE;
 
+				if(downBnt && !downChk) {
+					if(curUnEdit) {
+						username[unSize-1]--;
+						if(username[unSize-1]==0x40)
+							username[unSize-1] = 0x5A;
+					} else {
+						password[pwSize-1]--;
+						if(password[pwSize-1]==0x40)
+							password[pwSize-1] = 0x5A;
+					}
+					downChk = SDL_TRUE;
+				} else if(!downBnt) downChk = SDL_FALSE;
+
+				if(leftBnt && !leftChk && (unSize-1)>0) {
+					if(curUnEdit) {
+						username = (char *)realloc(username, --unSize+1);
+						username[unSize] = 0x00;
+					} else {
+						password = (char *)realloc(password, --pwSize+1);
+						password[pwSize] = 0x00;
+					}
+					leftChk = SDL_TRUE;
+				} else if(!leftBnt) leftChk = SDL_FALSE;
+
+				if(rightBnt && !rightChk && (unSize+1)<12) {
+					if(curUnEdit) {
+						username = (char *)realloc(username, ++unSize+1);
+						username[unSize-1] = 0x41;
+						username[unSize] = 0x00;
+					} else {
+						password = (char *)realloc(password, ++pwSize+1);
+						password[pwSize-1] = 0x41;
+						password[pwSize] = 0x00;
+					}
+					rightChk = SDL_TRUE;
+				} else if(!rightBnt) rightChk = SDL_FALSE;
+
+				if(aBnt && !aChk) {
+					if(curUnEdit) {
+						curUnEdit = SDL_FALSE;
+					} else curUnEdit = SDL_TRUE;
+					aChk = SDL_TRUE;
+				} else if(!aBnt) aChk = SDL_FALSE;
+
+				if(bBnt && !bChk) {
+					printf("accept the info?\n");
+					bChk = SDL_TRUE;
+				} else if(!bBnt) bChk = SDL_FALSE;
+
+				SDL_Color color0 = {0x73, 0x73, 0x73, 0x00};
+				SDL_Color color1 = {0xFF, 0xFF, 0xFF, 0x00};
+				SDL_Color color2 = {0xFF, 0x00, 0x00, 0x00};
+
+				char *str0 = "Username:";
+				drawText(str0, color0, 0, 0);
+				drawText(username, color1, 8*9, 0);
+
+				char *str1 = "Password:";
+				drawText(str1, color0, 0, 16);
+				drawText(password, color1, 8*9, 16);
+
+				if(curUnEdit)
+					drawText(&username[unSize-1], color2, 8*9+8*(unSize-1), 0);
+				else
+					drawText(&password[pwSize-1], color2, 8*9+8*(pwSize-1), 16);
+			} break;
+			case 0x01: {
+				// NOTE: get the password from the player
+			} break;
+			case 0x02: {
+				// NOTE: show the connecting screen while the logging in
+				// the server will send all the current players that are online
+			} break;
+			case 0x03: {
+				// NOTE: display the game state
+			} break;
+		}
 
 		/* === */
 
 		SDL_Texture* tex = SDL_CreateTextureFromSurface(renderer, screen);
 		SDL_RenderCopy(renderer, tex, NULL, NULL);
-
 		SDL_RenderPresent(renderer);
 		SDL_DestroyTexture(tex);
 	}
 
 	/* === */
 
-	// NOTE: send logout packet
-	memset(&packet, 0, sizeof(packet));
-
-	unSize = strlen(argv[1]);
-	pwSize = strlen(argv[2]);
-
-	packet.maxlen = 1+4+unSize+4+pwSize;
-	packet.data = (uint8_t *)malloc(packet.maxlen);
-
-	offset = 0;
-
-	memset(packet.data+offset, 0x02, 1);
-	offset += 1;
-	memcpy(packet.data+offset, &unSize, 4);
-	offset += 4;
-	memcpy(packet.data+offset, argv[1], unSize);
-	offset += unSize;
-	memcpy(packet.data+offset, &pwSize, 4);
-	offset += 4;
-	memcpy(packet.data+offset, argv[2], pwSize);
-	offset += pwSize;
-
-	packet.len = offset;
-
-	// NOTE: SDLNet_UDP_Send returns the number of people the packet was sent to
-	if(!SDLNet_UDP_Send(clientFD, serverChannel, &packet))
-		fprintf(stderr, "SDLNet_UDP_Send: %s\n", SDLNet_GetError());
-
-	free(packet.data);
-
-	// NOTE: free socketset
-	SDLNet_FreeSocketSet(socketSet);
+	free(username);
+	free(password);
 
 	/* === */
 
@@ -165,39 +201,7 @@ int main(int argc, char *argv[]) {
 }
 
 //-----------------------------------------------------------------------------
-void inputPoll(void) {
-	SDL_Event event;
-	while(SDL_PollEvent(&event)) {
-		switch(event.type) {
-			case SDL_QUIT: {
-				running = SDL_FALSE;
-			} break;
-			case SDL_KEYDOWN: {
-				switch(event.key.keysym.sym) {
-					case SDLK_ESCAPE:  break;
-					case SDLK_UP:  break;
-					case SDLK_DOWN:  break;
-					case SDLK_LEFT:  break;
-					case SDLK_RIGHT:  break;
-					case SDLK_LCTRL:  break;
-					case SDLK_LALT:  break;
-				}
-			} break;
-			case SDL_KEYUP: {
-				switch(event.key.keysym.sym) {
-					case SDLK_UP:  break;
-					case SDLK_DOWN:  break;
-					case SDLK_LEFT:  break;
-					case SDLK_RIGHT:  break;
-					case SDLK_LCTRL:  break;
-					case SDLK_LALT:  break;
-				}
-			} break;
-		}
-	}
-}
-
-//-----------------------------------------------------------------------------
+/*
 void networkPoll(void) {
 	// NOTE: check packet for a connection
 	if(SDLNet_CheckSockets(socketSet, 0)==-1) {
@@ -255,129 +259,78 @@ void networkPoll(void) {
 		free(packet.data);
 	}
 }
+*/
 
-//-----------------------------------------------------------------------------
-void libInit(void) {
-	// NOTE: initialize SDL2
-	if(SDL_Init(SDL_INIT_EVERYTHING)!=0) {
-		fprintf(stderr, "SDL_Init: %s\n", SDL_GetError());
-		exit(-1);
-	}
+/*
+// NOTE: build login packet (temp)
+if(argc<3) {
+	fprintf(stderr, "Error: incorrect number of arguements.\n");
 
-	// NOTE: initialize SDLNet
-	if(SDLNet_Init()==-1) {
-		fprintf(stderr, "SDLNet_Init: %s\n", SDLNet_GetError());
-		exit(-1);
-	}
+	gfxQuit();
+	netQuit();
+	libQuit();
 
-	// NOTE: initialize SDL_TTF
-	if(TTF_Init()==-1) {
-		fprintf(stderr, "TTF_Init: %s\n", TTF_GetError());
-		exit(-1);
-	}
+	return -1;
 }
 
-//-----------------------------------------------------------------------------
-void netInit(void) {
-	// NOTE: resolve the host IP struct
-	if(SDLNet_ResolveHost(&serverIp, "www.libgcw.com", 3490) == -1) {
-		fprintf(stderr, "SDLNet_ResolveHost: %s\n", SDLNet_GetError());
+UDPpacket packet = {};
 
-		TTF_Quit();
-		SDLNet_Quit();
-		SDL_Quit();
+uint32_t unSize = strlen(argv[1]);
+uint32_t pwSize = strlen(argv[2]);
 
-		exit(-1);
-	}
+packet.maxlen = 1+4+unSize+4+pwSize;
+packet.data = (uint8_t *)malloc(packet.maxlen);
 
-	// NOTE: open UDP socket file descriptor
-	clientFD = SDLNet_UDP_Open(0);
-	if(!clientFD) {
-		fprintf(stderr, "SDLNet_UDP_Open: %s\n", SDLNet_GetError());
+uint8_t offset = 0;
 
-		TTF_Quit();
-		SDLNet_Quit();
-		SDL_Quit();
+memset(packet.data+offset, 0x01, 1);
+offset += 1;
+memcpy(packet.data+offset, &unSize, 4);
+offset += 4;
+memcpy(packet.data+offset, argv[1], unSize);
+offset += unSize;
+memcpy(packet.data+offset, &pwSize, 4);
+offset += 4;
+memcpy(packet.data+offset, argv[2], pwSize);
+offset += pwSize;
 
-		exit(-1);
-	}
+packet.len = offset;
 
-	// NOTE: bind the server ip address to a channel on the client socket
-	serverChannel = SDLNet_UDP_Bind(clientFD, -1, &serverIp);
-	if(serverChannel==-1) {
-		fprintf(stderr, "SDLNet_UDP_Bind: %s\n", SDLNet_GetError());
+// NOTE: SDLNet_UDP_Send returns the number of people the packet was sent to
+if(!SDLNet_UDP_Send(clientFD, serverChannel, &packet))
+	fprintf(stderr, "SDLNet_UDP_Send: %s\n", SDLNet_GetError());
 
-		SDLNet_UDP_Close(clientFD);
+free(packet.data);
+*/
 
-		TTF_Quit();
-		SDLNet_Quit();
-		SDL_Quit();
-		
-		exit(-1);
-	}
-}
+/*
+// NOTE: send logout packet
+memset(&packet, 0, sizeof(packet));
 
-//-----------------------------------------------------------------------------
-void gfxInit(void) {
-	// NOTE: initialize the GFX resources
-	window = SDL_CreateWindow(
-		SCREEN_NAME,
-		SDL_WINDOWPOS_CENTERED,
-		SDL_WINDOWPOS_CENTERED,
-		SCREEN_SCALE*SCREEN_W,
-		SCREEN_SCALE*SCREEN_H,
-		0
-	);
+unSize = strlen(argv[1]);
+pwSize = strlen(argv[2]);
 
-	renderer = SDL_CreateRenderer(
-		window, -1,
-		SDL_RENDERER_ACCELERATED|
-		SDL_RENDERER_PRESENTVSYNC
-	);
+packet.maxlen = 1+4+unSize+4+pwSize;
+packet.data = (uint8_t *)malloc(packet.maxlen);
 
-	// NOTE: if Vsync didn't work then exit
-	SDL_RendererInfo info;
-	SDL_GetRendererInfo(renderer, &info);
-	if(!(info.flags & SDL_RENDERER_PRESENTVSYNC)) {
-		fprintf(stderr, "SDL_CreateRenderer: failed to set Vsync.\n");
+offset = 0;
 
-		netQuit();
-		libQuit();
+memset(packet.data+offset, 0x02, 1);
+offset += 1;
+memcpy(packet.data+offset, &unSize, 4);
+offset += 4;
+memcpy(packet.data+offset, argv[1], unSize);
+offset += unSize;
+memcpy(packet.data+offset, &pwSize, 4);
+offset += 4;
+memcpy(packet.data+offset, argv[2], pwSize);
+offset += pwSize;
 
-		exit(-1);
-	}
+packet.len = offset;
 
-	// NOTE: user screen for holding pixel data
-	screen = SDL_CreateRGBSurface(0, SCREEN_W, SCREEN_H, 24, 0x00, 0x00, 0x00, 0x00);
-	SDL_SetColorKey(screen, 1, 0xFF00FF);
-	SDL_FillRect(screen, 0, 0xFF00FF);
-}
+// NOTE: SDLNet_UDP_Send returns the number of people the packet was sent to
+if(!SDLNet_UDP_Send(clientFD, serverChannel, &packet))
+	fprintf(stderr, "SDLNet_UDP_Send: %s\n", SDLNet_GetError());
 
-//-----------------------------------------------------------------------------
-void libQuit(void) {
-	// NOTE: release SDL_TTF
-	TTF_Quit();
-
-	// NOTE: release SDLNet
-	SDLNet_Quit();
-
-	// NOTE: release SDL2
-	SDL_Quit();
-}
-
-//-----------------------------------------------------------------------------
-void netQuit(void) {
-	// NOTE: unbind all ips on the server channel
-	SDLNet_UDP_Unbind(clientFD, serverChannel);
-
-	// NOTE: close UDP socket
-	SDLNet_UDP_Close(clientFD);
-}
-
-//-----------------------------------------------------------------------------
-void gfxQuit(void) {
-	// NOTE: free the GFX resources
-	SDL_FreeSurface(screen);
-	SDL_DestroyRenderer(renderer);
-	SDL_DestroyWindow(window);
-}
+free(packet.data);
+*/
