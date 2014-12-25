@@ -4,6 +4,7 @@ gcc main.c -o server -L./ -lSDL2main -lSDL2 -lSDL2_net -lsqlite3
 */
 
 //-----------------------------------------------------------------------------
+#include <time.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -23,8 +24,15 @@ SDLNet_SocketSet socketSet;
 #include "types.h"
 
 //-----------------------------------------------------------------------------
-uint8_t numChrsOnNode[32];
-struct Player chrsOnline[32][4];
+int playerToPing;
+int channelToPing;
+time_t timeOfPing;
+uint8_t serverState;
+SDL_bool waitingForPong;
+time_t lastTimePingsWentOut;
+
+uint8_t numChrsOnNode[SDLNET_MAX_UDPCHANNELS];
+struct Player chrsOnline[SDLNET_MAX_UDPCHANNELS][SDLNET_MAX_UDPADDRESSES];
 
 //-----------------------------------------------------------------------------
 #include "login.h"
@@ -78,8 +86,84 @@ int main(int argc, char *argv[]) {
 			fprintf(stderr, "SDLNet_CheckSockets: %s\n", SDLNet_GetError());
 			break;
 		} if(!n) {
-			// NOTE: if the server doesn't recieve anything then clean up player state
-			// and send out any ping-pong packets to make sure the client is still connected
+			// NOTE: if the server doesn't have anything to do then run through
+			// a few regular routines
+			switch(serverState) {
+				case 0x00: {
+					if((time(NULL)-lastTimePingsWentOut)>20) {
+						// NOTE: if the server is idle in its freetime then start sending out
+						// ping packets for the client to respond to
+						serverState = 0x01;
+						lastTimePingsWentOut = time(NULL);
+					}
+				} break;
+				case 0x01: {
+					if(waitingForPong) {
+						if((time(NULL)-timeOfPing)>5) {
+							// NOTE: if we hear nothing back after 5 secs then disconnect the player
+							struct Player *chr = &chrsOnline[channelToPing][playerToPing];
+							printf("player %s didn't respond to ping logging them out.\n", chr->username);
+
+							// NOTE: get logout packet data struct
+							struct logoutPacket p = {
+								chr->username,
+								chr->password,
+								strlen(chr->username),
+								strlen(chr->password)
+							};
+
+							uint32_t playerID;
+							switch(playerLogout(&p, &playerID)) {
+								case 0x02: {
+									printf("Logout success!\n");
+								} break;
+							}
+
+							// NOTE: no need to free because exLogoutPacket() isn't being used and
+							// playerLogout() frees the global char pointers
+							//free(p.username);
+							//free(p.password);
+
+							playerToPing++;
+							waitingForPong = SDL_FALSE;
+						}
+					} else {
+						// NOTE: make sure the is someone to ping and we haven't done all the players
+						// on that channel
+						if(numChrsOnNode[channelToPing]<1 || playerToPing>=numChrsOnNode[channelToPing]) {
+
+							channelToPing++;
+							playerToPing = 0;
+
+							if(channelToPing==(SDLNET_MAX_UDPCHANNELS)) {
+								channelToPing = 0;
+								serverState = 0x00;
+							}
+
+							continue;
+						}
+
+						struct Player *chr = &chrsOnline[channelToPing][playerToPing];
+
+						// NOTE: send a ping packet
+						uint8_t flag = 0x0A;
+						UDPpacket packet = {};
+
+						packet.data = &flag;
+
+						packet.len = 1;
+						packet.maxlen = 1;
+						packet.address = chrsOnline[channelToPing][playerToPing].ip;
+
+						if(!SDLNet_UDP_Send(serverFD, -1, &packet))
+							fprintf(stderr, "SDLNet_UDP_Send: %s\n", SDLNet_GetError());
+
+						timeOfPing = time(NULL);
+						waitingForPong = SDL_TRUE;
+					}
+				} break;
+			}
+
 			continue;
 		}
 
@@ -503,8 +587,14 @@ int main(int argc, char *argv[]) {
 						// TODO: will have to free these char * when the player disconnects
 						//free(chr.username);
 						//free(chr.password);
+
 						free(s2Packet.data);
 					}
+				} break;
+				case 0x0C: {
+					// NOTE: player responding with a pong packet
+					playerToPing++;
+					waitingForPong = SDL_FALSE;
 				} break;
 			}
 

@@ -93,6 +93,7 @@ decline
 0x09 = moveLeft
 0x0A = moveRight
 0x0B = getPlayersOnNode
+0x0C = replyToPingWithPong
 */
 
 /* ServerPacketFlags
@@ -105,6 +106,7 @@ decline
 0x07 = playerMoveDown
 0x08 = playerMoveLeft
 0x09 = playerMoveRight
+0x0A = pingPlayer
 
 // reserved for client side flags
 0x00 = waitingForServer

@@ -232,6 +232,19 @@ void networkPoll(void) {
 					}
 				}
 			} break;
+			case 0x0A: {
+				// NOTE: got a ping from server - send out a pong reply
+				uint8_t flag = 0x0C;
+				UDPpacket packet = {};
+
+				packet.data = &flag;
+
+				packet.len = 1;
+				packet.maxlen = 1;
+
+				if(!SDLNet_UDP_Send(clientFD, serverChannel, &packet))
+					fprintf(stderr, "SDLNet_UDP_Send: %s\n", SDLNet_GetError());
+			} break;
 		}
 
 		// NOTE: free the packet

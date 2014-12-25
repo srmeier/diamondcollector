@@ -11,10 +11,6 @@ gcc main.c -o client.exe -I./include -L./lib -lmingw32 -lSDL2main -lSDL2 -lSDL2_
 #include <SDL2/SDL_ttf.h>
 #include <SDL2/SDL_net.h>
 
-/* TODO:
-- the server should include the mainChr info with the loginSuccess packet
-*/
-
 //-----------------------------------------------------------------------------
 #define SCREEN_W 320 // 40 -> 20
 #define SCREEN_H 240 // 30 -> 15
@@ -213,7 +209,7 @@ int main(int argc, char *argv[]) {
 				*/
 
 				// NOTE: main game loop
-				//networkPoll();
+				networkPoll();
 
 				// NOTE: if the up key is pressed send a request to move up
 				if(upBnt && !upChk) {
@@ -278,9 +274,6 @@ int main(int argc, char *argv[]) {
 
 					rightChk = SDL_TRUE;
 				} else if(!rightBnt) rightChk = SDL_FALSE;
-
-				// NOTE: main game loop
-				networkPoll();
 
 				// NOTE: any 0x04 packets at this point are new players
 				int i;
