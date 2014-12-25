@@ -213,7 +213,7 @@ int main(int argc, char *argv[]) {
 				*/
 
 				// NOTE: main game loop
-				networkPoll();
+				//networkPoll();
 
 				// NOTE: if the up key is pressed send a request to move up
 				if(upBnt && !upChk) {
@@ -278,6 +278,9 @@ int main(int argc, char *argv[]) {
 
 					rightChk = SDL_TRUE;
 				} else if(!rightBnt) rightChk = SDL_FALSE;
+
+				// NOTE: main game loop
+				networkPoll();
 
 				// NOTE: any 0x04 packets at this point are new players
 				int i;

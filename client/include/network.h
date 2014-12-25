@@ -137,6 +137,8 @@ void networkPoll(void) {
 					} else {
 						// TODO: sent the server a warning about location mismatch and
 						// should probably log it
+						printf("location mismatch\n");
+						chrsOnline[i].y = ny;
 					}
 				}
 			} break;
@@ -165,6 +167,8 @@ void networkPoll(void) {
 					} else {
 						// TODO: sent the server a warning about location mismatch and
 						// should probably log it
+						printf("location mismatch\n");
+						chrsOnline[i].y = ny;
 					}
 				}
 			} break;
@@ -193,6 +197,8 @@ void networkPoll(void) {
 					} else {
 						// TODO: sent the server a warning about location mismatch and
 						// should probably log it
+						printf("location mismatch\n");
+						chrsOnline[i].x = nx;
 					}
 				}
 			} break;
@@ -221,6 +227,8 @@ void networkPoll(void) {
 					} else {
 						// TODO: sent the server a warning about location mismatch and
 						// should probably log it
+						printf("location mismatch\n");
+						chrsOnline[i].x = nx;
 					}
 				}
 			} break;
