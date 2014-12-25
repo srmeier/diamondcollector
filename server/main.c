@@ -100,10 +100,12 @@ int main(int argc, char *argv[]) {
 			}
 
 			// NOTE: display IPaddress infomation
+			/*
 			Uint32 ipaddr = SDL_SwapBE32(packet.address.host);
 			printf("packet from-> %d.%d.%d.%d:%d bound to channel %d\n",
 				ipaddr>>24, (ipaddr>>16)&0xFF, (ipaddr>>8)&0xFF, ipaddr&0xFF,
 				SDL_SwapBE16(packet.address.port), packet.channel);
+			*/
 
 			// NOTE: read the flag for packet identity
 			uint8_t flag;
@@ -270,6 +272,178 @@ int main(int argc, char *argv[]) {
 
 					free(p.username);
 					free(p.password);
+				} break;
+				case 0x07: {
+					// NOTE: ignore the packet if it isn't from a bound address
+					if(packet.channel==-1) break;
+
+					// NOTE: the player is requesting a move upward
+					int i;
+					for(i=0; i<numChrsOnNode[packet.channel]; i++) {
+						if(packet.address.host==chrsOnline[packet.channel][i].ip.host) {
+							if(packet.address.port==chrsOnline[packet.channel][i].ip.port) {
+								struct Player *chr = &chrsOnline[packet.channel][i];
+
+								if(movePlayerUp(chr)) {
+									// NOTE: send out the move up flag, playerID, and new Y to everyone
+									// on the channel
+									UDPpacket sPacket = {};
+
+									sPacket.maxlen = 0x09; // 9 bytes
+									sPacket.data = (uint8_t *)malloc(0x09);
+
+									uint8_t offset = 0;
+
+									memset(sPacket.data+offset, 0x06, 1);
+									offset += 1;
+									memcpy(sPacket.data+offset, &chr->id, 4);
+									offset += 4;
+									memcpy(sPacket.data+offset, &chr->y, 4);
+									offset += 4;
+
+									sPacket.len = offset;
+
+									if(!SDLNet_UDP_Send(serverFD, chr->node, &sPacket)) {
+										// NOTE: could just be that there is no one on the channel
+										if(strcmp(SDLNet_GetError(), ""))
+											fprintf(stderr, "SDLNet_UDP_Send: %s\n", SDLNet_GetError());
+									}
+
+									// NOTE: free packet data
+									free(sPacket.data);
+								}
+							}
+						}
+					}
+				} break;
+				case 0x08: {
+					// NOTE: ignore the packet if it isn't from a bound address
+					if(packet.channel==-1) break;
+
+					// NOTE: the player is requesting a move downward
+					int i;
+					for(i=0; i<numChrsOnNode[packet.channel]; i++) {
+						if(packet.address.host==chrsOnline[packet.channel][i].ip.host) {
+							if(packet.address.port==chrsOnline[packet.channel][i].ip.port) {
+								struct Player *chr = &chrsOnline[packet.channel][i];
+
+								if(movePlayerDown(chr)) {
+									// NOTE: send out the move up flag, playerID, and new Y to everyone
+									// on the channel
+									UDPpacket sPacket = {};
+
+									sPacket.maxlen = 0x09; // 9 bytes
+									sPacket.data = (uint8_t *)malloc(0x09);
+
+									uint8_t offset = 0;
+
+									memset(sPacket.data+offset, 0x07, 1);
+									offset += 1;
+									memcpy(sPacket.data+offset, &chr->id, 4);
+									offset += 4;
+									memcpy(sPacket.data+offset, &chr->y, 4);
+									offset += 4;
+
+									sPacket.len = offset;
+
+									if(!SDLNet_UDP_Send(serverFD, chr->node, &sPacket)) {
+										// NOTE: could just be that there is no one on the channel
+										if(strcmp(SDLNet_GetError(), ""))
+											fprintf(stderr, "SDLNet_UDP_Send: %s\n", SDLNet_GetError());
+									}
+
+									// NOTE: free packet data
+									free(sPacket.data);
+								}
+							}
+						}
+					}
+				} break;
+				case 0x09: {
+					// NOTE: ignore the packet if it isn't from a bound address
+					if(packet.channel==-1) break;
+
+					// NOTE: the player is requesting a move leftward
+					int i;
+					for(i=0; i<numChrsOnNode[packet.channel]; i++) {
+						if(packet.address.host==chrsOnline[packet.channel][i].ip.host) {
+							if(packet.address.port==chrsOnline[packet.channel][i].ip.port) {
+								struct Player *chr = &chrsOnline[packet.channel][i];
+
+								if(movePlayerLeft(chr)) {
+									// NOTE: send out the move up flag, playerID, and new Y to everyone
+									// on the channel
+									UDPpacket sPacket = {};
+
+									sPacket.maxlen = 0x09; // 9 bytes
+									sPacket.data = (uint8_t *)malloc(0x09);
+
+									uint8_t offset = 0;
+
+									memset(sPacket.data+offset, 0x08, 1);
+									offset += 1;
+									memcpy(sPacket.data+offset, &chr->id, 4);
+									offset += 4;
+									memcpy(sPacket.data+offset, &chr->x, 4);
+									offset += 4;
+
+									sPacket.len = offset;
+
+									if(!SDLNet_UDP_Send(serverFD, chr->node, &sPacket)) {
+										// NOTE: could just be that there is no one on the channel
+										if(strcmp(SDLNet_GetError(), ""))
+											fprintf(stderr, "SDLNet_UDP_Send: %s\n", SDLNet_GetError());
+									}
+
+									// NOTE: free packet data
+									free(sPacket.data);
+								}
+							}
+						}
+					}
+				} break;
+				case 0x0A: {
+					// NOTE: ignore the packet if it isn't from a bound address
+					if(packet.channel==-1) break;
+
+					// NOTE: the player is requesting a move rightward
+					int i;
+					for(i=0; i<numChrsOnNode[packet.channel]; i++) {
+						if(packet.address.host==chrsOnline[packet.channel][i].ip.host) {
+							if(packet.address.port==chrsOnline[packet.channel][i].ip.port) {
+								struct Player *chr = &chrsOnline[packet.channel][i];
+
+								if(movePlayerRight(chr)) {
+									// NOTE: send out the move up flag, playerID, and new Y to everyone
+									// on the channel
+									UDPpacket sPacket = {};
+
+									sPacket.maxlen = 0x09; // 9 bytes
+									sPacket.data = (uint8_t *)malloc(0x09);
+
+									uint8_t offset = 0;
+
+									memset(sPacket.data+offset, 0x09, 1);
+									offset += 1;
+									memcpy(sPacket.data+offset, &chr->id, 4);
+									offset += 4;
+									memcpy(sPacket.data+offset, &chr->x, 4);
+									offset += 4;
+
+									sPacket.len = offset;
+
+									if(!SDLNet_UDP_Send(serverFD, chr->node, &sPacket)) {
+										// NOTE: could just be that there is no one on the channel
+										if(strcmp(SDLNet_GetError(), ""))
+											fprintf(stderr, "SDLNet_UDP_Send: %s\n", SDLNet_GetError());
+									}
+
+									// NOTE: free packet data
+									free(sPacket.data);
+								}
+							}
+						}
+					}
 				} break;
 				case 0x0B: {
 					// NOTE: ignore the packet if it isn't from a bound address

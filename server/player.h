@@ -2,6 +2,66 @@
 #define __PLAYER_H_
 
 //-----------------------------------------------------------------------------
+int movePlayerUp(struct Player *chr) {
+	char sqlCmd[0xFF] = {};
+	sprintf(sqlCmd, "UPDATE Players SET Y = %d WHERE PlayerID = %d;", --chr->y, chr->id);
+
+	char *errorMsg;
+	if(sqlite3_exec(database, sqlCmd, NULL, NULL, &errorMsg)!=SQLITE_OK) {
+		fprintf(stderr, "SQL error: %s\n", errorMsg);
+		sqlite3_free(errorMsg);
+		return 0;
+	}
+
+	return 1;
+}
+
+//-----------------------------------------------------------------------------
+int movePlayerDown(struct Player *chr) {
+	char sqlCmd[0xFF] = {};
+	sprintf(sqlCmd, "UPDATE Players SET Y = %d WHERE PlayerID = %d;", ++chr->y, chr->id);
+
+	char *errorMsg;
+	if(sqlite3_exec(database, sqlCmd, NULL, NULL, &errorMsg)!=SQLITE_OK) {
+		fprintf(stderr, "SQL error: %s\n", errorMsg);
+		sqlite3_free(errorMsg);
+		return 0;
+	}
+
+	return 1;
+}
+
+//-----------------------------------------------------------------------------
+int movePlayerLeft(struct Player *chr) {
+	char sqlCmd[0xFF] = {};
+	sprintf(sqlCmd, "UPDATE Players SET X = %d WHERE PlayerID = %d;", --chr->x, chr->id);
+
+	char *errorMsg;
+	if(sqlite3_exec(database, sqlCmd, NULL, NULL, &errorMsg)!=SQLITE_OK) {
+		fprintf(stderr, "SQL error: %s\n", errorMsg);
+		sqlite3_free(errorMsg);
+		return 0;
+	}
+
+	return 1;
+}
+
+//-----------------------------------------------------------------------------
+int movePlayerRight(struct Player *chr) {
+	char sqlCmd[0xFF] = {};
+	sprintf(sqlCmd, "UPDATE Players SET X = %d WHERE PlayerID = %d;", ++chr->x, chr->id);
+
+	char *errorMsg;
+	if(sqlite3_exec(database, sqlCmd, NULL, NULL, &errorMsg)!=SQLITE_OK) {
+		fprintf(stderr, "SQL error: %s\n", errorMsg);
+		sqlite3_free(errorMsg);
+		return 0;
+	}
+
+	return 1;
+}
+
+//-----------------------------------------------------------------------------
 int getPlayerInfoCB(void *data, int argc, char *argv[], char *colName[]) {
 	// NOTE: set the player struct
 	uint8_t *retCode = &((struct dbData *)data)->retCode;

@@ -112,6 +112,118 @@ void networkPoll(void) {
 					else memcpy(&chrsOnline[i], &tempPlayers[i+1], sizeof(struct Player));
 				}
 			} break;
+			case 0x06: {
+				// NOTE: player moveUp
+				/*
+				- flag         ( 1)
+				- PlayerID     ( 4)
+				- Y            ( 4)
+				============== ( 9)
+				*/
+
+				uint32_t id = 0;
+				uint32_t ny = 0;
+
+				memcpy(&id, packet.data+offset, 4);
+				offset += 4;
+				memcpy(&ny, packet.data+offset, 4);
+				offset += 4;
+
+				int i;
+				for(i=0; i<numChrs; i++) {
+					if(id!=chrsOnline[i].id) continue;
+					if((chrsOnline[i].y-1)==ny) {
+						chrsOnline[i].y = ny;
+					} else {
+						// TODO: sent the server a warning about location mismatch and
+						// should probably log it
+					}
+				}
+			} break;
+			case 0x07: {
+				// NOTE: player moveDown
+				/*
+				- flag         ( 1)
+				- PlayerID     ( 4)
+				- Y            ( 4)
+				============== ( 9)
+				*/
+
+				uint32_t id = 0;
+				uint32_t ny = 0;
+
+				memcpy(&id, packet.data+offset, 4);
+				offset += 4;
+				memcpy(&ny, packet.data+offset, 4);
+				offset += 4;
+
+				int i;
+				for(i=0; i<numChrs; i++) {
+					if(id!=chrsOnline[i].id) continue;
+					if((chrsOnline[i].y+1)==ny) {
+						chrsOnline[i].y = ny;
+					} else {
+						// TODO: sent the server a warning about location mismatch and
+						// should probably log it
+					}
+				}
+			} break;
+			case 0x08: {
+				// NOTE: player moveLeft
+				/*
+				- flag         ( 1)
+				- PlayerID     ( 4)
+				- X            ( 4)
+				============== ( 9)
+				*/
+
+				uint32_t id = 0;
+				uint32_t nx = 0;
+
+				memcpy(&id, packet.data+offset, 4);
+				offset += 4;
+				memcpy(&nx, packet.data+offset, 4);
+				offset += 4;
+
+				int i;
+				for(i=0; i<numChrs; i++) {
+					if(id!=chrsOnline[i].id) continue;
+					if((chrsOnline[i].x-1)==nx) {
+						chrsOnline[i].x = nx;
+					} else {
+						// TODO: sent the server a warning about location mismatch and
+						// should probably log it
+					}
+				}
+			} break;
+			case 0x09: {
+				// NOTE: player moveRight
+				/*
+				- flag         ( 1)
+				- PlayerID     ( 4)
+				- X            ( 4)
+				============== ( 9)
+				*/
+
+				uint32_t id = 0;
+				uint32_t nx = 0;
+
+				memcpy(&id, packet.data+offset, 4);
+				offset += 4;
+				memcpy(&nx, packet.data+offset, 4);
+				offset += 4;
+
+				int i;
+				for(i=0; i<numChrs; i++) {
+					if(id!=chrsOnline[i].id) continue;
+					if((chrsOnline[i].x+1)==nx) {
+						chrsOnline[i].x = nx;
+					} else {
+						// TODO: sent the server a warning about location mismatch and
+						// should probably log it
+					}
+				}
+			} break;
 		}
 
 		// NOTE: free the packet

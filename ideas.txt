@@ -101,6 +101,10 @@ decline
 0x03 = loginSuccess
 0x04 = newPlayerConnection
 0x05 = playerDisconnect
+0x06 = playerMoveUp
+0x07 = playerMoveDown
+0x08 = playerMoveLeft
+0x09 = playerMoveRight
 
 // reserved for client side flags
 0x00 = waitingForServer
