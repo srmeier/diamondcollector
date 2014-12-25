@@ -64,12 +64,11 @@ struct Player *chrsOnline;
 /* NOTE: instance includes */
 //-----------------------------------------------------------------------------
 #include "login.h"
+#include "logout.h"
+#include "network.h"
 
 //-----------------------------------------------------------------------------
-void networkPoll(void);
 
-//-----------------------------------------------------------------------------
-void inputPoll(void);
 
 //-----------------------------------------------------------------------------
 int main(int argc, char *argv[]) {
@@ -230,15 +229,30 @@ int main(int argc, char *argv[]) {
 				*/
 			} break;
 			case 0xFF: {
+				// NOTE: begin shutdown process
 				if(mainChr.state) {
 					// NOTE: logout over network
-					SDL_Color color0 = {0x73, 0x73, 0x73, 0x00};
+					struct logoutPacket p = {
+						username, password,
+						unSize, pwSize
+					};
 
-					char *str0 = "Logging out...";
-					drawText(str0, color0, 0, 0);
+					static uint8_t retCode = 0xFF;
+					retCode = playerLogout(&p, retCode);
 
-					// NOTE: if the retCode from server is good then close the game
-					running = SDL_FALSE;
+					switch(retCode) {
+						case 0x00: {
+							// NOTE: waiting for logout message
+							SDL_Color color0 = {0x73, 0x73, 0x73, 0x00};
+
+							char *str0 = "Logging out...";
+							drawText(str0, color0, 0, 0);
+						} break;
+						case 0x01: {
+							// NOTE: if the retCode from server is good then close the game
+							running = SDL_FALSE;
+						} break;
+					}
 				} else running = SDL_FALSE;
 			} break;
 		}
@@ -270,117 +284,3 @@ int main(int argc, char *argv[]) {
 
 	return 0;
 }
-
-//-----------------------------------------------------------------------------
-void networkPoll(void) {
-	// NOTE: check for connections
-	if(SDLNet_CheckSockets(socketSet, 0)==-1) {
-		fprintf(stderr, "SDLNet_CheckSockets: %s\n", SDLNet_GetError());
-		return;
-	}
-
-	if(SDLNet_SocketReady(clientFD)) {
-		// NOTE: here we simply get how many players the server is going to send
-		UDPpacket packet;
-
-		// NOTE: allocate space for packet
-		packet.maxlen = 0xAA; // 170 bytes
-		packet.data = (uint8_t *)malloc(0xAA);
-
-		// NOTE: get packet
-		int recv = SDLNet_UDP_Recv(clientFD, &packet);
-		if(!recv) {
-			free(packet.data);
-			return;
-		}
-
-		// NOTE: if it isn't the server then ignore it
-		if(packet.channel!=serverChannel) {
-			free(packet.data);
-			return;
-		}
-
-		// NOTE: read the flag for packet identity
-		uint8_t flag = 0;
-		uint8_t offset = 0;
-
-		memcpy(&flag, packet.data, 1);
-		offset += 1;
-
-		switch(flag) {
-			case 0x04: {
-				// NOTE: new player connection
-				/*
-				- flag         ( 1)
-				- State        ( 4)
-				- PlayerID     ( 4)
-				- Node         ( 4)
-				- X            ( 4)
-				- Y            ( 4)
-				- DiamondCount ( 4)
-				============== (25)
-				*/
-
-				struct Player tempPlayers[numChrs];
-				memcpy(tempPlayers, chrsOnline, numChrs*sizeof(struct Player));
-
-				chrsOnline = (struct Player *)realloc(chrsOnline, ++numChrs*sizeof(struct Player));
-				memset(chrsOnline, 0x00, numChrs*sizeof(struct Player));
-
-				int i;
-				for(i=0; i<(numChrs-1); i++)
-					memcpy(&chrsOnline[i], &tempPlayers[i], sizeof(struct Player));
-				struct Player *chr = &chrsOnline[numChrs-1];
-
-				memcpy(&chr->state, packet.data+offset, 4);
-				offset += 4;
-				memcpy(&chr->id, packet.data+offset, 4);
-				offset += 4;
-				memcpy(&chr->node, packet.data+offset, 4);
-				offset += 4;
-				memcpy(&chr->x, packet.data+offset, 4);
-				offset += 4;
-				memcpy(&chr->y, packet.data+offset, 4);
-				offset += 4;
-				memcpy(&chr->count, packet.data+offset, 4);
-				offset += 4;
-			} break;
-		}
-
-		// NOTE: free the packet
-		free(packet.data);
-	}
-}
-
-//-----------------------------------------------------------------------------
-/*
-// NOTE: send logout packet
-memset(&packet, 0, sizeof(packet));
-
-unSize = strlen(argv[1]);
-pwSize = strlen(argv[2]);
-
-packet.maxlen = 1+4+unSize+4+pwSize;
-packet.data = (uint8_t *)malloc(packet.maxlen);
-
-offset = 0;
-
-memset(packet.data+offset, 0x02, 1);
-offset += 1;
-memcpy(packet.data+offset, &unSize, 4);
-offset += 4;
-memcpy(packet.data+offset, argv[1], unSize);
-offset += unSize;
-memcpy(packet.data+offset, &pwSize, 4);
-offset += 4;
-memcpy(packet.data+offset, argv[2], pwSize);
-offset += pwSize;
-
-packet.len = offset;
-
-// NOTE: SDLNet_UDP_Send returns the number of people the packet was sent to
-if(!SDLNet_UDP_Send(clientFD, serverChannel, &packet))
-	fprintf(stderr, "SDLNet_UDP_Send: %s\n", SDLNet_GetError());
-
-free(packet.data);
-*/

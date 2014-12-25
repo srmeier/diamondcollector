@@ -6,6 +6,7 @@ struct Player {
 	uint32_t x;
 	uint32_t y;
 	uint32_t id;
+	IPaddress ip;
 	uint32_t node;
 	char *username;
 	char *password;

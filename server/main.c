@@ -21,13 +21,15 @@ SDLNet_SocketSet socketSet;
 
 //-----------------------------------------------------------------------------
 #include "types.h"
-#include "login.h"
-#include "logout.h"
-#include "player.h"
 
 //-----------------------------------------------------------------------------
 uint8_t numChrsOnNode[32];
 struct Player chrsOnline[32][4];
+
+//-----------------------------------------------------------------------------
+#include "login.h"
+#include "logout.h"
+#include "player.h"
 
 // NOTE: if login successes then bind client IP to channel
 // NOTE: 4 possible ips per channel, 32 channels, 128 possible
@@ -147,6 +149,7 @@ int main(int argc, char *argv[]) {
 								printf("\nLogin success!\n");
 
 								struct Player chr = getPlayerInfo(playerID);
+								chr.ip = packet.address;
 
 								printf("X        -> %d\n", chr.x);
 								printf("Y        -> %d\n", chr.y);
@@ -247,7 +250,6 @@ int main(int argc, char *argv[]) {
 					free(p.username);
 					free(p.password);
 				} break;
-
 				case 0x02: {
 					// NOTE: ignore the packet if it isn't from a bound address
 					if(packet.channel==-1) break;
@@ -269,7 +271,6 @@ int main(int argc, char *argv[]) {
 					free(p.username);
 					free(p.password);
 				} break;
-
 				case 0x0B: {
 					// NOTE: ignore the packet if it isn't from a bound address
 					if(packet.channel==-1) break;

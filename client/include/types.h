@@ -6,6 +6,7 @@ struct Player {
 	uint32_t x;
 	uint32_t y;
 	uint32_t id;
+	IPaddress ip;
 	uint32_t node;
 	char *username;
 	char *password;
@@ -15,6 +16,14 @@ struct Player {
 
 //-----------------------------------------------------------------------------
 struct loginPacket {
+	char *username;
+	char *password;
+	uint32_t unLen;
+	uint32_t pwLen;
+};
+
+//-----------------------------------------------------------------------------
+struct logoutPacket {
 	char *username;
 	char *password;
 	uint32_t unLen;
