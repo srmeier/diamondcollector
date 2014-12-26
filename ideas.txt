@@ -14,7 +14,8 @@
 0x09 = mining left
 0x0A = mining right
 
-// internal server states
+// internal server states (easy way to log errors in future)
+0xFE = account doesn't exist
 0xFF = incorrect password
 */
 

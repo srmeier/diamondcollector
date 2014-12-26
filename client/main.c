@@ -53,7 +53,7 @@ SDL_Surface *spritesheet[NUM_SPRITES];
 
 /* NOTE: instance variables */
 //-----------------------------------------------------------------------------
-uint8_t numChrs;
+uint32_t numChrs;
 struct Player mainChr;
 struct Player *chrsOnline;
 

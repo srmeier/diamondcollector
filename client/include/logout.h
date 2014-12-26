@@ -7,6 +7,7 @@ uint8_t playerLogout(struct logoutPacket *p, uint8_t retCode) {
 	switch(retCode) {
 		case 0x00: {
 			// NOTE: for now don't wait for an OK from server - just exit
+			return 0x01;
 		} break;
 		case 0xFF: {
 			// NOTE: send out the logout packet
@@ -37,7 +38,7 @@ uint8_t playerLogout(struct logoutPacket *p, uint8_t retCode) {
 			free(packet.data);
 
 			// NOTE: set the retCode
-			return 0x01; // NOTE: for now don't wait for an OK from server - just exit
+			return 0x00;
 		}
 	}
 }

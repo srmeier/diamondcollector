@@ -215,10 +215,10 @@ uint8_t playerLogin(struct loginPacket *p, uint8_t retCode) {
 }
 
 //-----------------------------------------------------------------------------
-uint8_t getChrsOnline(struct Player **chrsOnline, uint8_t *numChrs, uint8_t retCode) {
+uint8_t getChrsOnline(struct Player **chrsOnline, uint32_t *numChrs, uint8_t retCode) {
 	// NOTE: get chrsOnline for a particular Node
-	static uint8_t curChr = 0;
-	static uint8_t _numChrs = 0;
+	static uint32_t curChr = 0;
+	static uint32_t _numChrs = 0;
 	struct Player *_chrsOnline = *chrsOnline;
 
 	// NOTE: switch based on retCode
@@ -235,8 +235,8 @@ uint8_t getChrsOnline(struct Player **chrsOnline, uint8_t *numChrs, uint8_t retC
 				UDPpacket packet;
 
 				// NOTE: allocate space for packet
-				packet.maxlen = 0x01;
-				packet.data = (uint8_t *)malloc(0x01);
+				packet.maxlen = 0x04;
+				packet.data = (uint8_t *)malloc(0x04);
 
 				// NOTE: get packet
 				int recv = SDLNet_UDP_Recv(clientFD, &packet);
@@ -252,7 +252,7 @@ uint8_t getChrsOnline(struct Player **chrsOnline, uint8_t *numChrs, uint8_t retC
 				}
 
 				// NOTE: on a successful flag set the numChrs
-				memcpy(&_numChrs, packet.data, 1);
+				memcpy(&_numChrs, packet.data, 4);
 				*numChrs = _numChrs;
 
 				printf("receiving %d players.\n", _numChrs);

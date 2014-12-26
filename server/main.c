@@ -229,11 +229,15 @@ int main(int argc, char *argv[]) {
 					player.password[pwLen] = '\0';
 					offset += pwLen;
 
+					// NOTE: if the account doesn't exist the player state will
+					// remain 0xFE
+					player.state = 0xFE;
+
 					// NOTE: check that the player's password matches and that
 					// the account isn't currently in use
 					switch(playerLogin(&player)) {
 						case 0x00: {
-							// NOTE: retCode = 0x01 on password match
+							// NOTE: player.state = 0x00 on password match
 							printf("\nLogin success!\n");
 
 							// NOTE: set the player's new state to online idle
@@ -252,8 +256,10 @@ int main(int argc, char *argv[]) {
 
 							if(ind==-1) {
 								// NOTE: the node is full
+								// TODO: handle this
 							} else if(ind==-2) {
 								// NOTE: the player's node location is corrupt
+								// TODO: handle this
 							} else {
 								// NOTE: send a packet out to everyone on this node
 								// letting them know that the player is joining
@@ -290,6 +296,9 @@ int main(int argc, char *argv[]) {
 								memcpy(_packet.data+offset, &player.count, 4);
 								offset += 4;
 
+								// NOTE: set the packet length to the offset point
+								_packet.len = offset;
+
 								// NOTE: send the packet to the connecting player so
 								// they know which character is theirs
 								_packet.address = packet.address;
@@ -318,7 +327,6 @@ int main(int argc, char *argv[]) {
 								free(_packet.data);
 
 								// NOTE: add the player to the internal server node memory
-								// TODO: remember to free() the username and password on logout
 								memcpy(&players[player.node][ind], &player, sizeof(struct Player));
 
 								// NOTE: set the index mask to true
@@ -328,70 +336,154 @@ int main(int argc, char *argv[]) {
 								playerSave(&player);
 							}
 						} break;
+						case 0xFE:
+							// NOTE: currently treating non-existent account like a password mismatch
 						case 0xFF: {
-							/*
-							// NOTE: retCode = 0x00 on password mismatch
-							printf("Incorrect password.\n");
+							// NOTE: player.state = 0xFF on password mismatch
+							printf("Incorrect password / non-existent account.\n");
 
-							uint8_t sFlag = 0x01;
-							UDPpacket sPacket = {};
+							uint8_t flag = 0x01;
+							UDPpacket _packet = {};
 
-							sPacket.len = 1;
-							sPacket.data = &sFlag;
-							sPacket.maxlen = 1;
-							sPacket.address = packet.address;
+							_packet.data = &flag;
 
-							if(!SDLNet_UDP_Send(serverFD, -1, &sPacket))
+							_packet.len = 1;
+							_packet.maxlen = 1;
+							_packet.address = packet.address;
+
+							if(!SDLNet_UDP_Send(serverFD, -1, &_packet))
 								fprintf(stderr, "SDLNet_UDP_Send: %s\n", SDLNet_GetError());
-							*/
 
 							free(player.username);
 							free(player.password);
 						} break;
 						default: {
-							/*
-							// NOTE: retCode = 0x02 if password matches but the account is in use
+							// NOTE: player.state > 0x00 if password matches but the account is in use
 							printf("Account in use.\n");
 
-							uint8_t sFlag = 0x02;
-							UDPpacket sPacket = {};
+							uint8_t flag = 0x02;
+							UDPpacket _packet = {};
 
-							sPacket.len = 1;
-							sPacket.data = &sFlag;
-							sPacket.maxlen = 1;
-							sPacket.address = packet.address;
+							_packet.data = &flag;
 
-							if(!SDLNet_UDP_Send(serverFD, -1, &sPacket))
+							_packet.len = 1;
+							_packet.maxlen = 1;
+							_packet.address = packet.address;
+
+							if(!SDLNet_UDP_Send(serverFD, -1, &_packet))
 								fprintf(stderr, "SDLNet_UDP_Send: %s\n", SDLNet_GetError());
-							*/
 
 							free(player.username);
 							free(player.password);
 						} break;
 					}
 				} break;
-				/*
 				case 0x02: {
-					// NOTE: ignore the packet if it isn't from a bound address
-					if(packet.channel==-1) break;
+					// NOTE: get the player which is logged in on the incoming address
+					struct Player *player = getPlayerFromIP(packet.address);
+					if(player == NULL) break;
 
-					// NOTE: get logout packet data struct
-					struct logoutPacket p = exLogoutPacket(&packet, &offset);
+					uint32_t unLen = 0;
+					uint32_t pwLen = 0;
 
-					if(offset==packet.len) {
-						// NOTE: check that the player's password matches
-						uint32_t playerID;
+					char *username = NULL;
+					char *password = NULL;
 
-						switch(playerLogout(&p, &playerID)) {
-							case 0x02: {
-								printf("Logout success!\n");
-							} break;
-						}
+					memcpy(&unLen, packet.data+offset, 4);
+					offset += 4;
+
+					username = (char *)malloc(unLen+1);
+					memcpy(username, packet.data+offset, unLen);
+					username[unLen] = '\0';
+					offset += unLen;
+
+					memcpy(&pwLen, packet.data+offset, 4);
+					offset += 4;
+
+					password = (char *)malloc(pwLen+1);
+					memcpy(password, packet.data+offset, pwLen);
+					password[pwLen] = '\0';
+					offset += pwLen;
+
+					// NOTE: check that the information matches
+					int check00 = !strcmp(username, player->username);
+					int check01 = !strcmp(password, player->password);
+
+					// NOTE: free the packet username and password
+					free(username);
+					free(password);
+
+					// NOTE: check that the information matches
+					if(check00 && check01)
+						player->state = 0x00;
+					else break;
+
+					// NOTE: send a packet out to everyone on this node
+					// letting them know that the player is leaving.
+					UDPpacket _packet = {};
+
+					/*
+					- flag (1) 0x05
+					- id   (4)
+					====== (5)
+					*/
+
+					_packet.maxlen = 0x05; // 5 bytes
+					_packet.data = (uint8_t *)malloc(0x05);
+
+					uint8_t offset = 0;
+
+					memset(_packet.data+offset, 0x05, 1);
+					offset += 1;
+					memcpy(_packet.data+offset, &player->id, 4);
+					offset += 4;
+
+					// NOTE: set the packet length to the offset point
+					_packet.len = offset;
+
+					// NOTE: send the packet out to everyone but the player disconnecting
+					int i;
+					for(i=0; i<PLAYER_MAX; i++) {
+						if(!playerIndexMask[player->node][i])
+							continue;
+
+						_packet.address.host = players[player->node][i].host;
+						_packet.address.port = players[player->node][i].port;
+
+						check00 = packet.address.host==players[player->node][i].host;
+						check01 = packet.address.port==players[player->node][i].port;
+
+						if(check00 && check01)
+							continue;
+
+						if(!SDLNet_UDP_Send(serverFD, -1, &_packet))
+							fprintf(stderr, "SDLNet_UDP_Send: %s\n", SDLNet_GetError());
 					}
 
-					free(p.username);
-					free(p.password);
+					// NOTE: free the packet
+					free(_packet.data);
+
+					// NOTE: save the new player state
+					playerSave(player);
+
+					free(player->username);
+					free(player->password);
+
+					// NOTE: get the index of the player on the node
+					int ind = getPlayerIndex(player);
+					if(ind>=0) {
+						// NOTE: free the index in the index mask
+						playerIndexMask[player->node][ind] = SDL_FALSE;
+
+						// NOTE: remove the player from the players array
+						memset(player, 0x00, sizeof(struct Player));
+						printf("Logout success!\n");
+					} else {
+						// NOTE: player was never in the players array should
+						// probably log this sort of thing
+					}
 				} break;
+				/*
 				case 0x07: {
 					// NOTE: ignore the packet if it isn't from a bound address
 					if(packet.channel==-1) break;
@@ -564,74 +656,80 @@ int main(int argc, char *argv[]) {
 						}
 					}
 				} break;
+				*/
 				case 0x0B: {
-					// NOTE: ignore the packet if it isn't from a bound address
-					if(packet.channel==-1) break;
+					// NOTE: get the player which is logged in on the incoming address
+					struct Player *player = getPlayerFromIP(packet.address);
+					if(player == NULL) break;
 
 					// NOTE: notify client of how many players are being sent
-					UDPpacket s1Packet = {};
+					uint32_t numOnNode = getNumOnNode(player->node);
+					UDPpacket _packet0 = {};
 
-					s1Packet.len = 1;
-					s1Packet.maxlen = 1;
-					s1Packet.address = packet.address;
-					s1Packet.data = &numChrsOnNode[packet.channel];
+					_packet0.data = (uint8_t *)malloc(0x04);
 
-					if(!SDLNet_UDP_Send(serverFD, -1, &s1Packet))
+					memcpy(_packet0.data, &numOnNode, 4);
+
+					_packet0.len = 4;
+					_packet0.maxlen = 4;
+					_packet0.address = packet.address;
+
+					if(!SDLNet_UDP_Send(serverFD, -1, &_packet0))
 						fprintf(stderr, "SDLNet_UDP_Send: %s\n", SDLNet_GetError());
+					free(_packet0.data);
 
-					// NOTE: this flag will return all the players on a particular node
+					// NOTE: send out the player information to the newly connected player
+					// (could just be new to the node)
 					int i;
-					for(i=0; i<numChrsOnNode[packet.channel]; i++) {
-						UDPpacket s2Packet = {};
-						struct Player chr = chrsOnline[packet.channel][i];
+					for(i=0; i<PLAYER_MAX; i++) {
+						if(!playerIndexMask[player->node][i])
+							continue;
 
-						
-						- state        ( 4)
-						- PlayerID     ( 4)
-						- Node         ( 4)
-						- X            ( 4)
-						- Y            ( 4)
-						- DiamondCount ( 4)
-						============== (24)
-						
+						UDPpacket _packet1 = {};
+						struct Player *tempPlayer = &players[player->node][i];
 
-						s2Packet.maxlen = 0x18; // 24 bytes
-						s2Packet.data = (uint8_t *)malloc(0x18);
+						/*
+						- state (4)
+						- id    (4)
+						- node  (4)
+						- x     (4)
+						- y     (4)
+						- count (4)
+						======= (24)
+						*/
+
+						_packet1.maxlen = 0x18;
+						_packet1.data = (uint8_t *)malloc(0x18); // 24 bytes
 
 						uint8_t offset = 0;
 
-						memcpy(s2Packet.data+offset, &chr.state, 4);
+						memcpy(_packet1.data+offset, &tempPlayer->state, 4);
 						offset += 4;
-						memcpy(s2Packet.data+offset, &chr.id, 4);
+						memcpy(_packet1.data+offset, &tempPlayer->id, 4);
 						offset += 4;
-						memcpy(s2Packet.data+offset, &chr.node, 4);
+						memcpy(_packet1.data+offset, &tempPlayer->node, 4);
 						offset += 4;
-						memcpy(s2Packet.data+offset, &chr.x, 4);
+						memcpy(_packet1.data+offset, &tempPlayer->x, 4);
 						offset += 4;
-						memcpy(s2Packet.data+offset, &chr.y, 4);
+						memcpy(_packet1.data+offset, &tempPlayer->y, 4);
 						offset += 4;
-						memcpy(s2Packet.data+offset, &chr.count, 4);
+						memcpy(_packet1.data+offset, &tempPlayer->count, 4);
 						offset += 4;
 
-						s2Packet.len = offset;
-						s2Packet.address = packet.address;
+						_packet1.len = offset;
+						_packet1.address = packet.address;
 
-						if(!SDLNet_UDP_Send(serverFD, -1, &s2Packet))
+						if(!SDLNet_UDP_Send(serverFD, -1, &_packet1))
 							fprintf(stderr, "SDLNet_UDP_Send: %s\n", SDLNet_GetError());
 
-						// TODO: will have to free these char * when the player disconnects
-						//free(chr.username);
-						//free(chr.password);
-
-						free(s2Packet.data);
+						free(_packet1.data);
 					}
 				} break;
 				case 0x0C: {
 					// NOTE: player responding with a pong packet
-					playerToPing++;
-					waitingForPong = SDL_FALSE;
+					//playerToPing++;
+					//waitingForPong = SDL_FALSE;
 				} break;
-				*/
 			}
 
 			// NOTE: free the packet when done processing
