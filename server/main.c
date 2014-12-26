@@ -28,21 +28,18 @@ SDLNet_SocketSet socketSet;
 #include "types.h"
 
 //-----------------------------------------------------------------------------
-/*
+int nodeToPing;
 int playerToPing;
-int channelToPing;
 time_t timeOfPing;
 uint8_t serverState;
 SDL_bool waitingForPong;
 time_t lastTimePingsWentOut;
-*/
 
 struct Player players[NODE_MAX][PLAYER_MAX];    // 64 kilobytes
 SDL_bool playerIndexMask[NODE_MAX][PLAYER_MAX]; //  8 kilobytes
 
 //-----------------------------------------------------------------------------
 #include "login.h"
-//#include "logout.h"
 #include "player.h"
 
 //-----------------------------------------------------------------------------
@@ -85,7 +82,6 @@ int main(int argc, char *argv[]) {
 			fprintf(stderr, "SDLNet_CheckSockets: %s\n", SDLNet_GetError());
 			break;
 		} if(!n) {
-			/*
 			// NOTE: if the server doesn't have anything to do then run through
 			// a few regular routines
 			switch(serverState) {
@@ -101,61 +97,126 @@ int main(int argc, char *argv[]) {
 					if(waitingForPong) {
 						if((time(NULL)-timeOfPing)>5) {
 							// NOTE: if we hear nothing back after 5 secs then disconnect the player
-							struct Player *chr = &chrsOnline[channelToPing][playerToPing];
-							printf("player %s didn't respond to ping logging them out.\n", chr->username);
+							struct Player *player = &players[nodeToPing][playerToPing];
+							printf("player %s didn't respond to ping logging them out.\n", player->username);
 
-							// NOTE: get logout packet data struct
-							struct logoutPacket p = {
-								chr->username,
-								chr->password,
-								strlen(chr->username),
-								strlen(chr->password)
-							};
+							// NOTE: set the player state and log the player out
+							player->state = 0x00;
 
-							uint32_t playerID;
-							switch(playerLogout(&p, &playerID)) {
-								case 0x02: {
-									printf("Logout success!\n");
-								} break;
+							// NOTE: send a packet out to everyone on this node
+							// letting them know that the player is leaving.
+							UDPpacket _packet = {};
+
+							/*
+							- flag (1) 0x05
+							- id   (4)
+							====== (5)
+							*/
+
+							_packet.maxlen = 0x05; // 5 bytes
+							_packet.data = (uint8_t *)malloc(0x05);
+
+							uint8_t offset = 0;
+
+							memset(_packet.data+offset, 0x05, 1);
+							offset += 1;
+							memcpy(_packet.data+offset, &player->id, 4);
+							offset += 4;
+
+							// NOTE: set the packet length to the offset point
+							_packet.len = offset;
+
+							// NOTE: send the packet out to everyone but the player disconnecting
+							int i;
+							for(i=0; i<PLAYER_MAX; i++) {
+								if(!playerIndexMask[player->node][i])
+									continue;
+
+								_packet.address.host = players[player->node][i].host;
+								_packet.address.port = players[player->node][i].port;
+
+								if(!SDLNet_UDP_Send(serverFD, -1, &_packet))
+									fprintf(stderr, "SDLNet_UDP_Send: %s\n", SDLNet_GetError());
 							}
 
-							// NOTE: no need to free because exLogoutPacket() isn't being used and
-							// playerLogout() frees the global char pointers
-							//free(p.username);
-							//free(p.password);
+							// NOTE: free the packet
+							free(_packet.data);
+
+							// NOTE: save the new player state
+							playerSave(player);
+
+							free(player->username);
+							free(player->password);
+
+							// NOTE: get the index of the player on the node
+							int ind = getPlayerIndex(player);
+							if(ind>=0) {
+								// NOTE: free the index in the index mask
+								playerIndexMask[player->node][ind] = SDL_FALSE;
+
+								// NOTE: remove the player from the players array
+								memset(player, 0x00, sizeof(struct Player));
+								printf("Logout success!\n");
+							} else {
+								// NOTE: player was never in the players array should
+								// probably log this sort of thing
+							}
 
 							playerToPing++;
 							waitingForPong = SDL_FALSE;
 						}
 					} else {
-						// NOTE: make sure the is someone to ping and we haven't done all the players
-						// on that channel
-						if(numChrsOnNode[channelToPing]<1 || playerToPing>=numChrsOnNode[channelToPing]) {
+						// NOTE: make sure there are people on this node - else go to the
+						// next node
+						int numOnNode = getNumOnNode(nodeToPing);
 
-							channelToPing++;
+						if(numOnNode<=0) {
+							nodeToPing++;
 							playerToPing = 0;
 
-							if(channelToPing==(SDLNET_MAX_UDPCHANNELS)) {
-								channelToPing = 0;
+							if(nodeToPing==NODE_MAX) {
+								nodeToPing = 0;
 								serverState = 0x00;
 							}
 
-							continue;
+							break;
 						}
 
-						struct Player *chr = &chrsOnline[channelToPing][playerToPing];
+						// NOTE: if there isn't a player at this point in the pool then
+						// go to the next point in the pool
+						if(!playerIndexMask[nodeToPing][playerToPing]) {
+							playerToPing++;
+
+							if(playerToPing==PLAYER_MAX) {
+
+								nodeToPing++;
+								playerToPing = 0;
+
+								if(nodeToPing==NODE_MAX) {
+									nodeToPing = 0;
+									serverState = 0x00;
+								}
+							}
+
+							break;
+						}
+
+						// NOTE: get the player and send out the ping
+						struct Player *player = &players[nodeToPing][playerToPing];
 
 						// NOTE: send a ping packet
 						uint8_t flag = 0x0A;
-						UDPpacket packet = {};
+						UDPpacket _packet = {};
 
-						packet.data = &flag;
+						_packet.data = &flag;
 
-						packet.len = 1;
-						packet.maxlen = 1;
-						packet.address = chrsOnline[channelToPing][playerToPing].ip;
+						_packet.len = 1;
+						_packet.maxlen = 1;
 
-						if(!SDLNet_UDP_Send(serverFD, -1, &packet))
+						_packet.address.host = player->host;
+						_packet.address.port = player->port;
+
+						if(!SDLNet_UDP_Send(serverFD, -1, &_packet))
 							fprintf(stderr, "SDLNet_UDP_Send: %s\n", SDLNet_GetError());
 
 						timeOfPing = time(NULL);
@@ -163,7 +224,6 @@ int main(int argc, char *argv[]) {
 					}
 				} break;
 			}
-			*/
 			continue;
 		}
 
@@ -483,180 +543,202 @@ int main(int argc, char *argv[]) {
 						// probably log this sort of thing
 					}
 				} break;
-				/*
 				case 0x07: {
-					// NOTE: ignore the packet if it isn't from a bound address
-					if(packet.channel==-1) break;
+					// NOTE: get the player which is logged in on the incoming address
+					struct Player *player = getPlayerFromIP(packet.address);
+					if(player == NULL) break;
 
-					// NOTE: the player is requesting a move upward
+					// NOTE: perform a check to see if the player can move upward
+					player->y--;
+
+					// NOTE: save the new player state
+					playerSave(player);
+
+					// NOTE: let everyone know that the player has moved upward
 					int i;
-					for(i=0; i<numChrsOnNode[packet.channel]; i++) {
-						if(packet.address.host==chrsOnline[packet.channel][i].ip.host) {
-							if(packet.address.port==chrsOnline[packet.channel][i].ip.port) {
-								struct Player *chr = &chrsOnline[packet.channel][i];
+					for(i=0; i<PLAYER_MAX; i++) {
+						if(!playerIndexMask[player->node][i])
+							continue;
 
-								if(movePlayerUp(chr)) {
-									// NOTE: send out the move up flag, playerID, and new Y to everyone
-									// on the channel
-									UDPpacket sPacket = {};
+						UDPpacket _packet = {};
+						struct Player *tempPlayer = &players[player->node][i];
 
-									sPacket.maxlen = 0x09; // 9 bytes
-									sPacket.data = (uint8_t *)malloc(0x09);
+						/*
+						- flag (1) 0x06
+						- id   (4)
+						- y    (4)
+						====== (9)
+						*/
 
-									uint8_t offset = 0;
+						_packet.maxlen = 0x09; // 9 bytes
+						_packet.data = (uint8_t *)malloc(0x09);
 
-									memset(sPacket.data+offset, 0x06, 1);
-									offset += 1;
-									memcpy(sPacket.data+offset, &chr->id, 4);
-									offset += 4;
-									memcpy(sPacket.data+offset, &chr->y, 4);
-									offset += 4;
+						uint8_t offset = 0;
 
-									sPacket.len = offset;
+						memset(_packet.data+offset, 0x06, 1);
+						offset += 1;
+						memcpy(_packet.data+offset, &player->id, 4);
+						offset += 4;
+						memcpy(_packet.data+offset, &player->y, 4);
+						offset += 4;
 
-									if(!SDLNet_UDP_Send(serverFD, chr->node, &sPacket)) {
-										// NOTE: could just be that there is no one on the channel
-										if(strcmp(SDLNet_GetError(), ""))
-											fprintf(stderr, "SDLNet_UDP_Send: %s\n", SDLNet_GetError());
-									}
+						_packet.len = offset;
+						_packet.address.host = players[player->node][i].host;
+						_packet.address.port = players[player->node][i].port;
 
-									// NOTE: free packet data
-									free(sPacket.data);
-								}
-							}
-						}
+						if(!SDLNet_UDP_Send(serverFD, -1, &_packet))
+							fprintf(stderr, "SDLNet_UDP_Send: %s\n", SDLNet_GetError());
+
+						free(_packet.data);
 					}
 				} break;
 				case 0x08: {
-					// NOTE: ignore the packet if it isn't from a bound address
-					if(packet.channel==-1) break;
+					// NOTE: get the player which is logged in on the incoming address
+					struct Player *player = getPlayerFromIP(packet.address);
+					if(player == NULL) break;
 
-					// NOTE: the player is requesting a move downward
+					// NOTE: perform a check to see if the player can move downward
+					player->y++;
+
+					// NOTE: save the new player state
+					playerSave(player);
+
+					// NOTE: let everyone know that the player has moved upward
 					int i;
-					for(i=0; i<numChrsOnNode[packet.channel]; i++) {
-						if(packet.address.host==chrsOnline[packet.channel][i].ip.host) {
-							if(packet.address.port==chrsOnline[packet.channel][i].ip.port) {
-								struct Player *chr = &chrsOnline[packet.channel][i];
+					for(i=0; i<PLAYER_MAX; i++) {
+						if(!playerIndexMask[player->node][i])
+							continue;
 
-								if(movePlayerDown(chr)) {
-									// NOTE: send out the move up flag, playerID, and new Y to everyone
-									// on the channel
-									UDPpacket sPacket = {};
+						UDPpacket _packet = {};
+						struct Player *tempPlayer = &players[player->node][i];
 
-									sPacket.maxlen = 0x09; // 9 bytes
-									sPacket.data = (uint8_t *)malloc(0x09);
+						/*
+						- flag (1) 0x07
+						- id   (4)
+						- y    (4)
+						====== (9)
+						*/
 
-									uint8_t offset = 0;
+						_packet.maxlen = 0x09; // 9 bytes
+						_packet.data = (uint8_t *)malloc(0x09);
 
-									memset(sPacket.data+offset, 0x07, 1);
-									offset += 1;
-									memcpy(sPacket.data+offset, &chr->id, 4);
-									offset += 4;
-									memcpy(sPacket.data+offset, &chr->y, 4);
-									offset += 4;
+						uint8_t offset = 0;
 
-									sPacket.len = offset;
+						memset(_packet.data+offset, 0x07, 1);
+						offset += 1;
+						memcpy(_packet.data+offset, &player->id, 4);
+						offset += 4;
+						memcpy(_packet.data+offset, &player->y, 4);
+						offset += 4;
 
-									if(!SDLNet_UDP_Send(serverFD, chr->node, &sPacket)) {
-										// NOTE: could just be that there is no one on the channel
-										if(strcmp(SDLNet_GetError(), ""))
-											fprintf(stderr, "SDLNet_UDP_Send: %s\n", SDLNet_GetError());
-									}
+						_packet.len = offset;
+						_packet.address.host = players[player->node][i].host;
+						_packet.address.port = players[player->node][i].port;
 
-									// NOTE: free packet data
-									free(sPacket.data);
-								}
-							}
-						}
+						if(!SDLNet_UDP_Send(serverFD, -1, &_packet))
+							fprintf(stderr, "SDLNet_UDP_Send: %s\n", SDLNet_GetError());
+
+						free(_packet.data);
 					}
 				} break;
 				case 0x09: {
-					// NOTE: ignore the packet if it isn't from a bound address
-					if(packet.channel==-1) break;
+					// NOTE: get the player which is logged in on the incoming address
+					struct Player *player = getPlayerFromIP(packet.address);
+					if(player == NULL) break;
 
-					// NOTE: the player is requesting a move leftward
+					// NOTE: perform a check to see if the player can move leftward
+					player->x--;
+
+					// NOTE: save the new player state
+					playerSave(player);
+
+					// NOTE: let everyone know that the player has moved upward
 					int i;
-					for(i=0; i<numChrsOnNode[packet.channel]; i++) {
-						if(packet.address.host==chrsOnline[packet.channel][i].ip.host) {
-							if(packet.address.port==chrsOnline[packet.channel][i].ip.port) {
-								struct Player *chr = &chrsOnline[packet.channel][i];
+					for(i=0; i<PLAYER_MAX; i++) {
+						if(!playerIndexMask[player->node][i])
+							continue;
 
-								if(movePlayerLeft(chr)) {
-									// NOTE: send out the move up flag, playerID, and new Y to everyone
-									// on the channel
-									UDPpacket sPacket = {};
+						UDPpacket _packet = {};
+						struct Player *tempPlayer = &players[player->node][i];
 
-									sPacket.maxlen = 0x09; // 9 bytes
-									sPacket.data = (uint8_t *)malloc(0x09);
+						/*
+						- flag (1) 0x08
+						- id   (4)
+						- x    (4)
+						====== (9)
+						*/
 
-									uint8_t offset = 0;
+						_packet.maxlen = 0x09; // 9 bytes
+						_packet.data = (uint8_t *)malloc(0x09);
 
-									memset(sPacket.data+offset, 0x08, 1);
-									offset += 1;
-									memcpy(sPacket.data+offset, &chr->id, 4);
-									offset += 4;
-									memcpy(sPacket.data+offset, &chr->x, 4);
-									offset += 4;
+						uint8_t offset = 0;
 
-									sPacket.len = offset;
+						memset(_packet.data+offset, 0x08, 1);
+						offset += 1;
+						memcpy(_packet.data+offset, &player->id, 4);
+						offset += 4;
+						memcpy(_packet.data+offset, &player->x, 4);
+						offset += 4;
 
-									if(!SDLNet_UDP_Send(serverFD, chr->node, &sPacket)) {
-										// NOTE: could just be that there is no one on the channel
-										if(strcmp(SDLNet_GetError(), ""))
-											fprintf(stderr, "SDLNet_UDP_Send: %s\n", SDLNet_GetError());
-									}
+						_packet.len = offset;
+						_packet.address.host = players[player->node][i].host;
+						_packet.address.port = players[player->node][i].port;
 
-									// NOTE: free packet data
-									free(sPacket.data);
-								}
-							}
-						}
+						if(!SDLNet_UDP_Send(serverFD, -1, &_packet))
+							fprintf(stderr, "SDLNet_UDP_Send: %s\n", SDLNet_GetError());
+
+						free(_packet.data);
 					}
 				} break;
 				case 0x0A: {
-					// NOTE: ignore the packet if it isn't from a bound address
-					if(packet.channel==-1) break;
+					// NOTE: get the player which is logged in on the incoming address
+					struct Player *player = getPlayerFromIP(packet.address);
+					if(player == NULL) break;
 
-					// NOTE: the player is requesting a move rightward
+					// NOTE: perform a check to see if the player can move rightward
+					player->x++;
+
+					// NOTE: save the new player state
+					playerSave(player);
+
+					// NOTE: let everyone know that the player has moved upward
 					int i;
-					for(i=0; i<numChrsOnNode[packet.channel]; i++) {
-						if(packet.address.host==chrsOnline[packet.channel][i].ip.host) {
-							if(packet.address.port==chrsOnline[packet.channel][i].ip.port) {
-								struct Player *chr = &chrsOnline[packet.channel][i];
+					for(i=0; i<PLAYER_MAX; i++) {
+						if(!playerIndexMask[player->node][i])
+							continue;
 
-								if(movePlayerRight(chr)) {
-									// NOTE: send out the move up flag, playerID, and new Y to everyone
-									// on the channel
-									UDPpacket sPacket = {};
+						UDPpacket _packet = {};
+						struct Player *tempPlayer = &players[player->node][i];
 
-									sPacket.maxlen = 0x09; // 9 bytes
-									sPacket.data = (uint8_t *)malloc(0x09);
+						/*
+						- flag (1) 0x09
+						- id   (4)
+						- x    (4)
+						====== (9)
+						*/
 
-									uint8_t offset = 0;
+						_packet.maxlen = 0x09; // 9 bytes
+						_packet.data = (uint8_t *)malloc(0x09);
 
-									memset(sPacket.data+offset, 0x09, 1);
-									offset += 1;
-									memcpy(sPacket.data+offset, &chr->id, 4);
-									offset += 4;
-									memcpy(sPacket.data+offset, &chr->x, 4);
-									offset += 4;
+						uint8_t offset = 0;
 
-									sPacket.len = offset;
+						memset(_packet.data+offset, 0x09, 1);
+						offset += 1;
+						memcpy(_packet.data+offset, &player->id, 4);
+						offset += 4;
+						memcpy(_packet.data+offset, &player->x, 4);
+						offset += 4;
 
-									if(!SDLNet_UDP_Send(serverFD, chr->node, &sPacket)) {
-										// NOTE: could just be that there is no one on the channel
-										if(strcmp(SDLNet_GetError(), ""))
-											fprintf(stderr, "SDLNet_UDP_Send: %s\n", SDLNet_GetError());
-									}
+						_packet.len = offset;
+						_packet.address.host = players[player->node][i].host;
+						_packet.address.port = players[player->node][i].port;
 
-									// NOTE: free packet data
-									free(sPacket.data);
-								}
-							}
-						}
+						if(!SDLNet_UDP_Send(serverFD, -1, &_packet))
+							fprintf(stderr, "SDLNet_UDP_Send: %s\n", SDLNet_GetError());
+
+						free(_packet.data);
 					}
 				} break;
-				*/
 				case 0x0B: {
 					// NOTE: get the player which is logged in on the incoming address
 					struct Player *player = getPlayerFromIP(packet.address);
@@ -727,8 +809,8 @@ int main(int argc, char *argv[]) {
 				} break;
 				case 0x0C: {
 					// NOTE: player responding with a pong packet
-					//playerToPing++;
-					//waitingForPong = SDL_FALSE;
+					playerToPing++;
+					waitingForPong = SDL_FALSE;
 				} break;
 			}
 
