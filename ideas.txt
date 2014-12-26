@@ -13,6 +13,9 @@
 0x08 = mining down
 0x09 = mining left
 0x0A = mining right
+
+// internal server states
+0xFF = incorrect password
 */
 
 - states other than 0x00, 0x01, or 0x02 are considered "dirty" and the server
@@ -117,3 +120,73 @@ decline
 - the password acts as a key which allows to server to process requests to
 	change player state. if the passwords don't match then the request is
 	declined
+
+% === %
+
+- need a better way to handle many clients on the server server side
+- the server should be able to quickly identify whether an IPaddress is
+	connected
+- should be able to quickly search a node for a paritular player
+- I could store the player's IP and port within the database when a player
+	connects and when I need the player's information just build a struct
+	with calls to the database
+- also, if I needed an array of all the players on a node I could build this
+	from the database calls and return it
+- should have SQL calls like:
+
+/*
+// maintain a one-to-one with Players table
+struct Player {
+	uint32_t x;
+	uint32_t y;
+	uint32_t id;
+	uint32_t host;
+	uint16_t port;
+	uint32_t node;
+	char *username;
+	char *password;
+	uint32_t state;
+	uint32_t count;
+};
+
+struct Player player = {};
+
+player.host = ip.host;
+player.port = ip.port;
+player.username = username;
+player.password = password;
+
+retCode = playerLogin(player);
+*/
+
+- this will use the information filled in to set the player to an online state
+	and fill in the rest of the information in the player structure
+- the players which are currently online will be stored in a client pool
+- each player structure is 32 bytes in length
+- if the player max is 2048 then the pool is 65535 (64 kilobytes)
+- 2048 total max players, which many by split over 64 nodes leaves 32 players
+	per node maximum
+
+/*
+#define NODE_MAX 64
+#define PLAYER_MAX 32
+
+struct Player players[NODE_MAX][PLAYER_MAX];    // 64 kilobytes
+SDL_bool playerIndexMask[NODE_MAX][PLAYER_MAX]; //  8 kilobytes
+
+int getFreePlayerIndex(uint32_t node) {
+	if(node>=NODE_MAX||node<0) return -2;
+
+	int i;
+	for(i=0; i<PLAYER_MAX; i++) {
+		if(!playerIndexMask[node][i]) return i;
+	}
+	
+	return -1;
+}
+*/
+
+- this is nice because the most I'll have to iternate over is 32 because each
+	node helps to break up the player base
+- if a player attempts to connect to a node which is full they will be put in
+	a queue
