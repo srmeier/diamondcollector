@@ -41,10 +41,15 @@ struct Player chrsOnline[SDLNET_MAX_UDPCHANNELS][SDLNET_MAX_UDPADDRESSES];
 
 // NOTE: if login successes then bind client IP to channel
 // NOTE: 4 possible ips per channel, 32 channels, 128 possible
-// players online. I will have to keep track of which channels
-// I've put players on so I can send a packet on each channel
-// NOTE: packets other than login can be ignored when the sender isn't bound to
-// a channel else the channel will be -1 if not bound
+// players online.
+
+// TODO: check if the channel is full when a player connects
+// TODO: being dependent on these channels is terrible because they are soo small
+/*
+- when I send out a packet to everyone on a node I could run against the database
+- SELECT * FROM Players WHERE Node = $node AND State > 0 and then send the packets
+- within the DB callback
+*/
 
 //-----------------------------------------------------------------------------
 void libInit(void);
