@@ -98,6 +98,7 @@ decline
 0x0A = moveRight
 0x0B = getPlayersOnNode
 0x0C = replyToPingWithPong
+0x0D = requestSpriteIdOnNode
 */
 
 /* ServerPacketFlags
@@ -111,6 +112,7 @@ decline
 0x08 = playerMoveLeft
 0x09 = playerMoveRight
 0x0A = pingPlayer
+0x0B = spriteIdForNode
 
 // reserved for client side flags
 0x00 = waitingForServer
@@ -191,3 +193,21 @@ int getFreePlayerIndex(uint32_t node) {
 	node helps to break up the player base
 - if a player attempts to connect to a node which is full they will be put in
 	a queue
+
+% === %
+
+- once the player gets all the players that are online
+- it should send out the grid of indices for the sprites
+- a nodeGrid is 300 bytes, more than I really want to send out at once so
+	instead I could have to client send out a request packet (flag, node,
+	x, y) 13 bytes and get back (flag, spriteID, x, y) 13 bytes. this might
+	fix the size sent at once but now 3900 (13 times) as much memory needs to
+	be sent out
+- i could get rid of the flag out for the server (just have the player wait
+	like when they get all the player information)
+- but then I'd have to send it all out at once in a for-loop and that defeats
+	the point.
+- so instead have it on a call-by-call basis and just keep the flag
+- I might also want to do it this way for the players being sent to a new
+	connection
+- no need to send the node from the client side because the server knows it

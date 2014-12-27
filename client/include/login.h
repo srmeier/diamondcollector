@@ -366,4 +366,87 @@ uint8_t getChrsOnline(struct Player **chrsOnline, uint32_t *numChrs, uint8_t ret
 	}
 }
 
+//-----------------------------------------------------------------------------
+uint8_t getNodeSpriteIDs(uint8_t retCode) {
+	// NOTE: get spriteIDs for a particular Node
+	static uint8_t x = 0;
+	static uint8_t y = 0;
+
+	// NOTE: switch based on retCode
+	switch(retCode) {
+		case 0x00: {
+			// NOTE: send a packet for the next spriteID we need
+			UDPpacket packet = {};
+
+			packet.maxlen = 0x01; // 3 bytes
+			packet.data = (uint8_t *)malloc(0x01);
+
+			uint8_t offset = 0;
+
+			memset(packet.data+offset, 0x0D, 1);
+			offset += 1;
+
+			// NOTE: set the packet length to the offset point
+			packet.len = offset;
+
+			if(!SDLNet_UDP_Send(clientFD, serverChannel, &packet))
+				fprintf(stderr, "SDLNet_UDP_Send: %s\n", SDLNet_GetError());
+
+			// NOTE: free the packet
+			free(packet.data);
+
+			// NOTE: now we wait for the response
+			return 0x01;
+		} break;
+		case 0x01: {
+			// NOTE: check for connections
+			if(SDLNet_CheckSockets(socketSet, 0)==-1) {
+				fprintf(stderr, "SDLNet_CheckSockets: %s\n", SDLNet_GetError());
+				return 0x01;
+			}
+
+			if(SDLNet_SocketReady(clientFD)) {
+				UDPpacket packet = {};
+				packet.maxlen = 300+1;
+				packet.data = (uint8_t *)malloc(300+1);
+
+				// NOTE: get packet
+				int recv = SDLNet_UDP_Recv(clientFD, &packet);
+				if(!recv) {
+					free(packet.data);
+					return 0x01;
+				}
+
+				// NOTE: if it isn't the server then ignore it
+				if(packet.channel!=serverChannel) {
+					free(packet.data);
+					return 0x01;
+				}
+
+				// NOTE: get the tile information
+				uint8_t flag;
+				uint32_t offset = 0;
+
+				memcpy(&flag, packet.data+offset, 1);
+				offset += 1;
+
+				if(flag==0x0B) {
+					int i, j;
+					for(j=0; j<15; j++) {
+						for(i=0; i<20; i++) {
+							memcpy(&nodeGrid[j][i], packet.data+offset, 1);
+							offset += 1;
+						}
+					}
+				}
+
+				// NOTE: free the packet
+				free(packet.data);
+
+				return 0x02;
+			} else return 0x01;
+		} break;
+	}
+}
+
 #endif

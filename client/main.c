@@ -55,6 +55,7 @@ SDL_Surface *spritesheet[NUM_SPRITES];
 //-----------------------------------------------------------------------------
 uint32_t numChrs;
 struct Player mainChr;
+uint8_t nodeGrid[15][20];
 struct Player *chrsOnline;
 
 /* NOTE: instance includes */
@@ -193,14 +194,14 @@ int main(int argc, char *argv[]) {
 						// NOTE: diaplay a connecting message and poll for the server response
 						SDL_Color color0 = {0x73, 0x73, 0x73, 0x00};
 
-						char *str0 = "Waiting for server status...";
+						char *str0 = "Waiting for player information...";
 						drawText(str0, color0, 0, 0);
 					} break;
 					case 0x02: {
 						// NOTE: we got all the players and everything...
 						clearInput();
 						retCode = 0xFF;
-						gameState = 0x03;
+						gameState = 0x04;
 					} break;
 				}
 			} break;
@@ -287,6 +288,28 @@ int main(int argc, char *argv[]) {
 
 				/*
 				*/
+			} break;
+			case 0x04: {
+				// NOTE: login was a success so now we need to get all the spriteIDs for the node
+				static uint8_t retCode = 0x00;
+				retCode = getNodeSpriteIDs(retCode);
+
+				switch(retCode) {
+					case 0x00:
+					case 0x01: {
+						// NOTE: diaplay a connecting message and poll for the server response
+						SDL_Color color0 = {0x73, 0x73, 0x73, 0x00};
+
+						char *str0 = "Loading node information...";
+						drawText(str0, color0, 0, 0);
+					} break;
+					case 0x02: {
+						// NOTE: we got all the node sprites...
+						clearInput();
+						retCode = 0x00;
+						gameState = 0x03;
+					} break;
+				}
 			} break;
 			case 0xFF: {
 				// NOTE: begin shutdown process
