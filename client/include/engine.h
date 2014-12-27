@@ -238,6 +238,8 @@ void inputPoll(void) {
 }
 
 //-----------------------------------------------------------------------------
+extern struct Player mainChr;
+
 void updateMoveState(struct Player *player) {
 	if(!player->moveState.canMove&&!player->moveState.moving) return;
 
@@ -256,6 +258,10 @@ void updateMoveState(struct Player *player) {
 			case 2: player->moveState.x--; break;
 			case 3: player->moveState.x++; break;
 		}
+	}
+
+	if(player->id==mainChr.id) {
+		memcpy(&mainChr.moveState, &player->moveState, sizeof(struct moveState));
 	}
 }
 

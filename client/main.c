@@ -213,69 +213,75 @@ int main(int argc, char *argv[]) {
 				// NOTE: main game loop
 				networkPoll();
 
-				// NOTE: if the up key is pressed send a request to move up
-				if(upBnt && !upChk) {
-					UDPpacket packet = {};
+				if(!mainChr.moveState.moving) {
+					// NOTE: if the up key is pressed send a request to move up
+					if(upBnt && !upChk) {
+						UDPpacket packet = {};
 
-					uint8_t flag = 0x07;
-					packet.data = &flag;
+						uint8_t flag = 0x07;
+						packet.data = &flag;
 
-					packet.len = 1;
-					packet.maxlen = 1;
+						packet.len = 1;
+						packet.maxlen = 1;
 
-					if(!SDLNet_UDP_Send(clientFD, serverChannel, &packet))
-						fprintf(stderr, "SDLNet_UDP_Send: %s\n", SDLNet_GetError());
+						if(!SDLNet_UDP_Send(clientFD, serverChannel, &packet))
+							fprintf(stderr, "SDLNet_UDP_Send: %s\n", SDLNet_GetError());
 
-					upChk = SDL_TRUE;
-				} else if(!upBnt) upChk = SDL_FALSE;
+						upChk = SDL_TRUE;
+						mainChr.moveState.moving = SDL_TRUE;
+					} else if(!upBnt) upChk = SDL_FALSE;
 
-				// NOTE: if the down key is pressed send a request to move down
-				if(downBnt && !downChk) {
-					UDPpacket packet = {};
+					// NOTE: if the down key is pressed send a request to move down
+					if(downBnt && !downChk) {
+						UDPpacket packet = {};
 
-					uint8_t flag = 0x08;
-					packet.data = &flag;
+						uint8_t flag = 0x08;
+						packet.data = &flag;
 
-					packet.len = 1;
-					packet.maxlen = 1;
+						packet.len = 1;
+						packet.maxlen = 1;
 
-					if(!SDLNet_UDP_Send(clientFD, serverChannel, &packet))
-						fprintf(stderr, "SDLNet_UDP_Send: %s\n", SDLNet_GetError());
+						if(!SDLNet_UDP_Send(clientFD, serverChannel, &packet))
+							fprintf(stderr, "SDLNet_UDP_Send: %s\n", SDLNet_GetError());
 
-					downChk = SDL_TRUE;
-				} else if(!downBnt) downChk = SDL_FALSE;
+						downChk = SDL_TRUE;
+						mainChr.moveState.moving = SDL_TRUE;
+					} else if(!downBnt) downChk = SDL_FALSE;
 
-				// NOTE: if the left key is pressed send a request to move left
-				if(leftBnt && !leftChk) {
-					UDPpacket packet = {};
+					// NOTE: if the left key is pressed send a request to move left
+					if(leftBnt && !leftChk) {
+						UDPpacket packet = {};
 
-					uint8_t flag = 0x09;
-					packet.data = &flag;
+						uint8_t flag = 0x09;
+						packet.data = &flag;
 
-					packet.len = 1;
-					packet.maxlen = 1;
+						packet.len = 1;
+						packet.maxlen = 1;
 
-					if(!SDLNet_UDP_Send(clientFD, serverChannel, &packet))
-						fprintf(stderr, "SDLNet_UDP_Send: %s\n", SDLNet_GetError());
+						if(!SDLNet_UDP_Send(clientFD, serverChannel, &packet))
+							fprintf(stderr, "SDLNet_UDP_Send: %s\n", SDLNet_GetError());
 
-					leftChk = SDL_TRUE;
-				} else if(!leftBnt) leftChk = SDL_FALSE;
+						leftChk = SDL_TRUE;
+						mainChr.moveState.moving = SDL_TRUE;
+					} else if(!leftBnt) leftChk = SDL_FALSE;
 
-				// NOTE: if the right key is pressed send a request to move right
-				if(rightBnt && !rightChk) {
-					UDPpacket packet = {};
+					// NOTE: if the right key is pressed send a request to move right
+					if(rightBnt && !rightChk) {
+						UDPpacket packet = {};
 
-					uint8_t flag = 0x0A;
-					packet.data = &flag;
+						uint8_t flag = 0x0A;
+						packet.data = &flag;
 
-					packet.len = 1;
-					packet.maxlen = 1;
+						packet.len = 1;
+						packet.maxlen = 1;
 
-					if(!SDLNet_UDP_Send(clientFD, serverChannel, &packet))
-						fprintf(stderr, "SDLNet_UDP_Send: %s\n", SDLNet_GetError());
+						if(!SDLNet_UDP_Send(clientFD, serverChannel, &packet))
+							fprintf(stderr, "SDLNet_UDP_Send: %s\n", SDLNet_GetError());
 
-					rightChk = SDL_TRUE;
-				} else if(!rightBnt) rightChk = SDL_FALSE;
+						rightChk = SDL_TRUE;
+						mainChr.moveState.moving = SDL_TRUE;
+					} else if(!rightBnt) rightChk = SDL_FALSE;
+				}
 
 				int i, j;
 

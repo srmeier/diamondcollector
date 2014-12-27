@@ -146,27 +146,6 @@ void networkPoll(void) {
 						chrsOnline[i].moveState.moving = SDL_TRUE;
 						chrsOnline[i].moveState.moveFrame = 16;
 						chrsOnline[i].moveState.moveDirec = 0;
-						/*
-						if(!state->moving) {
-							if(input->isDown("up")&&canMove(_i, _j-1)) {
-								_moving = SDL_TRUE;
-								_moveframe = 16-1;
-								_movedirec = 0;
-							} else if(input->isDown("down")&&canMove(_i, _j+1)) {
-								_moving = SDL_TRUE;
-								_moveframe = 16-1;
-								_movedirec = 1;
-							} else if(input->isDown("left")&&canMove(_i-1, _j)) {
-								_moving = SDL_TRUE;
-								_moveframe = 16-1;
-								_movedirec = 2;
-							} else if(input->isDown("right")&&canMove(_i+1, _j)) {
-								_moving = SDL_TRUE;
-								_moveframe = 16-1;
-								_movedirec = 3;
-							}
-						}
-						*/
 					} else {
 						// TODO: sent the server a warning about location mismatch and
 						// should probably log it

@@ -217,3 +217,10 @@ int getFreePlayerIndex(uint32_t node) {
 
 - move the player into where they are suppose to be but never use client-side
 	logic to set the actually location. client is used to make it look smooth
+
+% === %
+
+- need to set the player pool on the client side
+- need to restructure the movement state
+- before doing this it might be worth splitting the server into two programs
+- http://www.cs.cf.ac.uk/Dave/C/node27.html
