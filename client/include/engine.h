@@ -210,6 +210,7 @@ void inputPoll(void) {
 			case SDL_QUIT: {
 				gameState = 0xFF;
 			} break;
+			// NOTE: set key down state
 			case SDL_KEYDOWN: {
 				switch(event.key.keysym.sym) {
 					case SDLK_ESCAPE: gameState = 0xFF; break;
@@ -221,6 +222,7 @@ void inputPoll(void) {
 					case SDLK_LALT: bBnt = SDL_TRUE; break;
 				}
 			} break;
+			// NOTE: set key up state
 			case SDL_KEYUP: {
 				switch(event.key.keysym.sym) {
 					case SDLK_UP: upBnt = SDL_FALSE; break;
@@ -236,7 +238,30 @@ void inputPoll(void) {
 }
 
 //-----------------------------------------------------------------------------
+void updateMoveState(struct Player *player) {
+	if(!player->moveState.canMove&&!player->moveState.moving) return;
+
+	player->moveState.i = floor(player->moveState.x/16.0f);
+	player->moveState.j = floor(player->moveState.y/16.0f);
+
+	if(player->moveState.moveFrame>0) player->moveState.moveFrame--;
+	else if(player->moveState.moving) {
+		player->moveState.moving = SDL_FALSE;
+	}
+
+	if(player->moveState.moving) {
+		switch(player->moveState.moveDirec) {
+			case 0: player->moveState.y--; break;
+			case 1: player->moveState.y++; break;
+			case 2: player->moveState.x--; break;
+			case 3: player->moveState.x++; break;
+		}
+	}
+}
+
+//-----------------------------------------------------------------------------
 void clearInput(void) {
+	// NOTE: clear all the check state
 	aChk = SDL_FALSE;
 	bChk = SDL_FALSE;
 	upChk = SDL_FALSE;
@@ -244,6 +269,7 @@ void clearInput(void) {
 	leftChk = SDL_FALSE;
 	rightChk = SDL_FALSE;
 
+	// NOTE: clear all the button state
 	aBnt = SDL_FALSE;
 	bBnt = SDL_FALSE;
 	upBnt = SDL_FALSE;

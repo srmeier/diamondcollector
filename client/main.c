@@ -2,6 +2,7 @@
 gcc main.c -o client.exe -I./include -L./lib -lmingw32 -lSDL2main -lSDL2 -lSDL2_ttf -lSDL2_net
 */
 
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -16,7 +17,7 @@ gcc main.c -o client.exe -I./include -L./lib -lmingw32 -lSDL2main -lSDL2 -lSDL2_
 #define SCREEN_H 240 // 30 -> 15
 #define NUM_SPRITES 1025
 #define SCREEN_NAME "Prototype"
-#define SCREEN_SCALE 2
+#define SCREEN_SCALE 1
 
 /* NOTE: engine variables */
 //-----------------------------------------------------------------------------
@@ -276,14 +277,47 @@ int main(int argc, char *argv[]) {
 					rightChk = SDL_TRUE;
 				} else if(!rightBnt) rightChk = SDL_FALSE;
 
-				// NOTE: any 0x04 packets at this point are new players
-				int i;
+				int i, j;
+
+				// NOTE: update moveState
+				for(i=0; i<numChrs; i++) {
+					updateMoveState(&chrsOnline[i]);
+				}
+
+				// NOTE: draw everything
+				for(j=0; j<15; j++) {
+					for(i=0; i<20; i++) {
+						if(nodeGrid[j][i]==0x01) {
+							SDL_Rect rect = {8*2*i, 8*2*j, 8*2, 8*2};
+							SDL_BlitSurface(test, NULL, screen, &rect);
+						}
+					}
+				}
+
 				for(i=0; i<numChrs; i++) {
 					// NOTE: the mainChr is in this array as well
 					struct Player chr = chrsOnline[i];
 
-					SDL_Rect rect = {8*2*chr.x, 8*2*chr.y, 8*2, 8*2};
+					int xOffset = 0;
+					int yOffset = 0;
+
+					if(chr.moveState.moveDirec==0) {
+						yOffset = 16+chr.moveState.y;
+					} else if(chr.moveState.moveDirec==1) {
+						yOffset = chr.moveState.y-16;
+					} else if(chr.moveState.moveDirec==2) {
+						xOffset = 16+chr.moveState.x;
+					} else if(chr.moveState.moveDirec==3) {
+						xOffset = chr.moveState.x-16;
+					}
+
+					SDL_Rect rect = {8*2*chr.x+xOffset, 8*2*chr.y+yOffset, 8*2, 8*2};
 					SDL_BlitSurface(test, NULL, screen, &rect);
+
+					/*
+					SDL_Rect rect2 = {8*2*chr.x, 8*2*chr.y, 8*2, 8*2};
+					SDL_BlitSurface(test, NULL, screen, &rect2);
+					*/
 				}
 
 				/*

@@ -74,6 +74,11 @@ void networkPoll(void) {
 				offset += 4;
 				memcpy(&chr->count, packet.data+offset, 4);
 				offset += 4;
+
+				chr->moveState.x = 0;
+				chr->moveState.y = -16;
+				chr->moveState.canMove = SDL_TRUE;
+				chr->moveState.moving = SDL_TRUE;
 			} break;
 			case 0x05: {
 				// NOTE: player disconnection
@@ -133,12 +138,46 @@ void networkPoll(void) {
 				for(i=0; i<numChrs; i++) {
 					if(id!=chrsOnline[i].id) continue;
 					if((chrsOnline[i].y-1)==ny) {
+
 						chrsOnline[i].y = ny;
+						chrsOnline[i].moveState.x = 0;
+						chrsOnline[i].moveState.y = 0;
+						
+						chrsOnline[i].moveState.moving = SDL_TRUE;
+						chrsOnline[i].moveState.moveFrame = 16;
+						chrsOnline[i].moveState.moveDirec = 0;
+						/*
+						if(!state->moving) {
+							if(input->isDown("up")&&canMove(_i, _j-1)) {
+								_moving = SDL_TRUE;
+								_moveframe = 16-1;
+								_movedirec = 0;
+							} else if(input->isDown("down")&&canMove(_i, _j+1)) {
+								_moving = SDL_TRUE;
+								_moveframe = 16-1;
+								_movedirec = 1;
+							} else if(input->isDown("left")&&canMove(_i-1, _j)) {
+								_moving = SDL_TRUE;
+								_moveframe = 16-1;
+								_movedirec = 2;
+							} else if(input->isDown("right")&&canMove(_i+1, _j)) {
+								_moving = SDL_TRUE;
+								_moveframe = 16-1;
+								_movedirec = 3;
+							}
+						}
+						*/
 					} else {
 						// TODO: sent the server a warning about location mismatch and
 						// should probably log it
 						printf("location mismatch\n");
 						chrsOnline[i].y = ny;
+						chrsOnline[i].moveState.x = 0;
+						chrsOnline[i].moveState.y = 0;
+						
+						chrsOnline[i].moveState.moving = SDL_TRUE;
+						chrsOnline[i].moveState.moveFrame = 16;
+						chrsOnline[i].moveState.moveDirec = 0;
 					}
 				}
 			} break;
@@ -163,12 +202,25 @@ void networkPoll(void) {
 				for(i=0; i<numChrs; i++) {
 					if(id!=chrsOnline[i].id) continue;
 					if((chrsOnline[i].y+1)==ny) {
+
 						chrsOnline[i].y = ny;
+						chrsOnline[i].moveState.x = 0;
+						chrsOnline[i].moveState.y = 0;
+						
+						chrsOnline[i].moveState.moving = SDL_TRUE;
+						chrsOnline[i].moveState.moveFrame = 16;
+						chrsOnline[i].moveState.moveDirec = 1;
 					} else {
 						// TODO: sent the server a warning about location mismatch and
 						// should probably log it
 						printf("location mismatch\n");
 						chrsOnline[i].y = ny;
+						chrsOnline[i].moveState.x = 0;
+						chrsOnline[i].moveState.y = 0;
+						
+						chrsOnline[i].moveState.moving = SDL_TRUE;
+						chrsOnline[i].moveState.moveFrame = 16;
+						chrsOnline[i].moveState.moveDirec = 1;
 					}
 				}
 			} break;
@@ -194,11 +246,23 @@ void networkPoll(void) {
 					if(id!=chrsOnline[i].id) continue;
 					if((chrsOnline[i].x-1)==nx) {
 						chrsOnline[i].x = nx;
+						chrsOnline[i].moveState.x = 0;
+						chrsOnline[i].moveState.y = 0;
+						
+						chrsOnline[i].moveState.moving = SDL_TRUE;
+						chrsOnline[i].moveState.moveFrame = 16;
+						chrsOnline[i].moveState.moveDirec = 2;
 					} else {
 						// TODO: sent the server a warning about location mismatch and
 						// should probably log it
 						printf("location mismatch\n");
 						chrsOnline[i].x = nx;
+						chrsOnline[i].moveState.x = 0;
+						chrsOnline[i].moveState.y = 0;
+						
+						chrsOnline[i].moveState.moving = SDL_TRUE;
+						chrsOnline[i].moveState.moveFrame = 16;
+						chrsOnline[i].moveState.moveDirec = 2;
 					}
 				}
 			} break;
@@ -223,12 +287,25 @@ void networkPoll(void) {
 				for(i=0; i<numChrs; i++) {
 					if(id!=chrsOnline[i].id) continue;
 					if((chrsOnline[i].x+1)==nx) {
+						
 						chrsOnline[i].x = nx;
+						chrsOnline[i].moveState.x = 0;
+						chrsOnline[i].moveState.y = 0;
+						
+						chrsOnline[i].moveState.moving = SDL_TRUE;
+						chrsOnline[i].moveState.moveFrame = 16;
+						chrsOnline[i].moveState.moveDirec = 3;
 					} else {
 						// TODO: sent the server a warning about location mismatch and
 						// should probably log it
 						printf("location mismatch\n");
 						chrsOnline[i].x = nx;
+						chrsOnline[i].moveState.x = 0;
+						chrsOnline[i].moveState.y = 0;
+						
+						chrsOnline[i].moveState.moving = SDL_TRUE;
+						chrsOnline[i].moveState.moveFrame = 16;
+						chrsOnline[i].moveState.moveDirec = 3;
 					}
 				}
 			} break;

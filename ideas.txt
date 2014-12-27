@@ -211,3 +211,9 @@ int getFreePlayerIndex(uint32_t node) {
 - I might also want to do it this way for the players being sent to a new
 	connection
 - no need to send the node from the client side because the server knows it
+- sending all 301 bytes is WAY faster then sending one by one
+
+% === %
+
+- move the player into where they are suppose to be but never use client-side
+	logic to set the actually location. client is used to make it look smooth

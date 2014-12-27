@@ -864,7 +864,7 @@ int main(int argc, char *argv[]) {
 					struct Player *player = getPlayerFromIP(packet.address);
 					if(player == NULL) break;
 
-					// NOTE: send the spriteID for the node position to the client
+					// NOTE: send the spriteIDs for the node position to the client
 					UDPpacket _packet = {};
 
 					/*
