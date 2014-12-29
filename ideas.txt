@@ -215,12 +215,28 @@ int getFreePlayerIndex(uint32_t node) {
 
 % === %
 
+TODO:
+- need to set the player pool on the client side
+- need to restructure the movement state
 - move the player into where they are suppose to be but never use client-side
 	logic to set the actually location. client is used to make it look smooth
 
-% === %
+- the client sends out player input information
+- the server collects the inputs, correlates it with the previous broadcasted
+	data, and builds a new data block to send out
+- the client uses these blocks of data to display game state at a faster rate
+	than what the server is communicating
+- it is important to have some way to correlate inputs with the previous data
+	block so the new data block doesn't feel like a lagging response
 
-- need to set the player pool on the client side
-- need to restructure the movement state
-- before doing this it might be worth splitting the server into two programs
-- http://www.cs.cf.ac.uk/Dave/C/node27.html
+- but the client should be sending a move request at most once every 16 frames
+	(because of the move animation) that's about 4 times a sec (4*1 byte)/sec
+- 4 bytes/sec * 32 players = 128 bytes/sec which should be like nothing
+- the jumping only seems to happen when the button is spammed
+- location mitmatch causes jump but jumping also happens without a location
+	mitmatch
+- fix it by skipping over packets that the server sends if that character is
+	still being animated
+- now I only seem to get the skip on a location mismatch
+
+% === %

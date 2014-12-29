@@ -213,74 +213,98 @@ int main(int argc, char *argv[]) {
 				// NOTE: main game loop
 				networkPoll();
 
-				if(!mainChr.moveState.moving) {
-					// NOTE: if the up key is pressed send a request to move up
-					if(upBnt && !upChk) {
-						UDPpacket packet = {};
+				if(mainChr.moveState.moveFrame==0) {
+				// NOTE: if the up key is pressed send a request to move up
+				if(upBnt && !upChk && !mainChr.moveState.moving) {
+					UDPpacket packet = {};
 
-						uint8_t flag = 0x07;
-						packet.data = &flag;
+					uint8_t flag = 0x07;
+					packet.data = &flag;
 
-						packet.len = 1;
-						packet.maxlen = 1;
+					packet.len = 1;
+					packet.maxlen = 1;
 
-						if(!SDLNet_UDP_Send(clientFD, serverChannel, &packet))
-							fprintf(stderr, "SDLNet_UDP_Send: %s\n", SDLNet_GetError());
+					if(!SDLNet_UDP_Send(clientFD, serverChannel, &packet))
+						fprintf(stderr, "SDLNet_UDP_Send: %s\n", SDLNet_GetError());
 
-						upChk = SDL_TRUE;
-						mainChr.moveState.moving = SDL_TRUE;
-					} else if(!upBnt) upChk = SDL_FALSE;
+					upChk = SDL_TRUE;
+					mainChr.moveState.moving = SDL_TRUE;
 
-					// NOTE: if the down key is pressed send a request to move down
-					if(downBnt && !downChk) {
-						UDPpacket packet = {};
+					int i;
+					for(i=0; i<numChrs; i++) {
+						if(chrsOnline[i].id==mainChr.id)
+							chrsOnline[i].moveState.moving = SDL_TRUE;
+					}
+				} else if(!upBnt && !mainChr.moveState.moving) upChk = SDL_FALSE;
 
-						uint8_t flag = 0x08;
-						packet.data = &flag;
+				// NOTE: if the down key is pressed send a request to move down
+				if(downBnt && !downChk && !mainChr.moveState.moving) {
+					UDPpacket packet = {};
 
-						packet.len = 1;
-						packet.maxlen = 1;
+					uint8_t flag = 0x08;
+					packet.data = &flag;
 
-						if(!SDLNet_UDP_Send(clientFD, serverChannel, &packet))
-							fprintf(stderr, "SDLNet_UDP_Send: %s\n", SDLNet_GetError());
+					packet.len = 1;
+					packet.maxlen = 1;
 
-						downChk = SDL_TRUE;
-						mainChr.moveState.moving = SDL_TRUE;
-					} else if(!downBnt) downChk = SDL_FALSE;
+					if(!SDLNet_UDP_Send(clientFD, serverChannel, &packet))
+						fprintf(stderr, "SDLNet_UDP_Send: %s\n", SDLNet_GetError());
 
-					// NOTE: if the left key is pressed send a request to move left
-					if(leftBnt && !leftChk) {
-						UDPpacket packet = {};
+					downChk = SDL_TRUE;
+					mainChr.moveState.moving = SDL_TRUE;
 
-						uint8_t flag = 0x09;
-						packet.data = &flag;
+					int i;
+					for(i=0; i<numChrs; i++) {
+						if(chrsOnline[i].id==mainChr.id)
+							chrsOnline[i].moveState.moving = SDL_TRUE;
+					}
+				} else if(!downBnt && !mainChr.moveState.moving) downChk = SDL_FALSE;
 
-						packet.len = 1;
-						packet.maxlen = 1;
+				// NOTE: if the left key is pressed send a request to move left
+				if(leftBnt && !leftChk && !mainChr.moveState.moving) {
+					UDPpacket packet = {};
 
-						if(!SDLNet_UDP_Send(clientFD, serverChannel, &packet))
-							fprintf(stderr, "SDLNet_UDP_Send: %s\n", SDLNet_GetError());
+					uint8_t flag = 0x09;
+					packet.data = &flag;
 
-						leftChk = SDL_TRUE;
-						mainChr.moveState.moving = SDL_TRUE;
-					} else if(!leftBnt) leftChk = SDL_FALSE;
+					packet.len = 1;
+					packet.maxlen = 1;
 
-					// NOTE: if the right key is pressed send a request to move right
-					if(rightBnt && !rightChk) {
-						UDPpacket packet = {};
+					if(!SDLNet_UDP_Send(clientFD, serverChannel, &packet))
+						fprintf(stderr, "SDLNet_UDP_Send: %s\n", SDLNet_GetError());
 
-						uint8_t flag = 0x0A;
-						packet.data = &flag;
+					leftChk = SDL_TRUE;
+					mainChr.moveState.moving = SDL_TRUE;
 
-						packet.len = 1;
-						packet.maxlen = 1;
+					int i;
+					for(i=0; i<numChrs; i++) {
+						if(chrsOnline[i].id==mainChr.id)
+							chrsOnline[i].moveState.moving = SDL_TRUE;
+					}
+				} else if(!leftBnt && !mainChr.moveState.moving) leftChk = SDL_FALSE;
 
-						if(!SDLNet_UDP_Send(clientFD, serverChannel, &packet))
-							fprintf(stderr, "SDLNet_UDP_Send: %s\n", SDLNet_GetError());
+				// NOTE: if the right key is pressed send a request to move right
+				if(rightBnt && !rightChk && !mainChr.moveState.moving) {
+					UDPpacket packet = {};
 
-						rightChk = SDL_TRUE;
-						mainChr.moveState.moving = SDL_TRUE;
-					} else if(!rightBnt) rightChk = SDL_FALSE;
+					uint8_t flag = 0x0A;
+					packet.data = &flag;
+
+					packet.len = 1;
+					packet.maxlen = 1;
+
+					if(!SDLNet_UDP_Send(clientFD, serverChannel, &packet))
+						fprintf(stderr, "SDLNet_UDP_Send: %s\n", SDLNet_GetError());
+
+					rightChk = SDL_TRUE;
+					mainChr.moveState.moving = SDL_TRUE;
+
+					int i;
+					for(i=0; i<numChrs; i++) {
+						if(chrsOnline[i].id==mainChr.id)
+							chrsOnline[i].moveState.moving = SDL_TRUE;
+					}
+				} else if(!rightBnt && !mainChr.moveState.moving) rightChk = SDL_FALSE;
 				}
 
 				int i, j;

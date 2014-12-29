@@ -78,7 +78,7 @@ void networkPoll(void) {
 				chr->moveState.x = 0;
 				chr->moveState.y = -16;
 				chr->moveState.canMove = SDL_TRUE;
-				chr->moveState.moving = SDL_TRUE;
+				chr->moveState.moving = SDL_FALSE;
 			} break;
 			case 0x05: {
 				// NOTE: player disconnection
@@ -137,6 +137,7 @@ void networkPoll(void) {
 				int i;
 				for(i=0; i<numChrs; i++) {
 					if(id!=chrsOnline[i].id) continue;
+					if(chrsOnline[i].moveState.moving) continue;
 					if((chrsOnline[i].y-1)==ny) {
 
 						chrsOnline[i].y = ny;
@@ -180,6 +181,7 @@ void networkPoll(void) {
 				int i;
 				for(i=0; i<numChrs; i++) {
 					if(id!=chrsOnline[i].id) continue;
+					if(chrsOnline[i].moveState.moving) continue;
 					if((chrsOnline[i].y+1)==ny) {
 
 						chrsOnline[i].y = ny;
@@ -223,6 +225,7 @@ void networkPoll(void) {
 				int i;
 				for(i=0; i<numChrs; i++) {
 					if(id!=chrsOnline[i].id) continue;
+					if(chrsOnline[i].moveState.moving) continue;
 					if((chrsOnline[i].x-1)==nx) {
 						chrsOnline[i].x = nx;
 						chrsOnline[i].moveState.x = 0;
@@ -265,6 +268,7 @@ void networkPoll(void) {
 				int i;
 				for(i=0; i<numChrs; i++) {
 					if(id!=chrsOnline[i].id) continue;
+					if(chrsOnline[i].moveState.moving) continue;
 					if((chrsOnline[i].x+1)==nx) {
 						
 						chrsOnline[i].x = nx;
