@@ -38,6 +38,8 @@ time_t lastTimePingsWentOut;
 struct Player players[NODE_MAX][PLAYER_MAX];    // 64 kilobytes
 SDL_bool playerIndexMask[NODE_MAX][PLAYER_MAX]; //  8 kilobytes
 
+int lastTimeMoveUpdate;
+
 uint8_t nodes[2][15][20] = {
 {
 	{0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01},
@@ -111,6 +113,8 @@ int main(int argc, char *argv[]) {
 	*/
 
 	for(;;) {
+		if(lastTimeMoveUpdate>0) lastTimeMoveUpdate--;
+
 		// NOTE: wait for a connection
 		int n = SDLNet_CheckSockets(socketSet, 0);
 
@@ -585,9 +589,11 @@ int main(int argc, char *argv[]) {
 					// NOTE: get the player which is logged in on the incoming address
 					struct Player *player = getPlayerFromIP(packet.address);
 					if(player == NULL) break;
+					if(lastTimeMoveUpdate!=0) break;
 
 					// NOTE: perform a check to see if the player can move upward
 					player->y--;
+					lastTimeMoveUpdate = 300000;
 
 					// NOTE: save the new player state
 					playerSave(player);
@@ -634,9 +640,11 @@ int main(int argc, char *argv[]) {
 					// NOTE: get the player which is logged in on the incoming address
 					struct Player *player = getPlayerFromIP(packet.address);
 					if(player == NULL) break;
+					if(lastTimeMoveUpdate!=0) break;
 
 					// NOTE: perform a check to see if the player can move downward
 					player->y++;
+					lastTimeMoveUpdate = 300000;
 
 					// NOTE: save the new player state
 					playerSave(player);
@@ -683,9 +691,11 @@ int main(int argc, char *argv[]) {
 					// NOTE: get the player which is logged in on the incoming address
 					struct Player *player = getPlayerFromIP(packet.address);
 					if(player == NULL) break;
+					if(lastTimeMoveUpdate!=0) break;
 
 					// NOTE: perform a check to see if the player can move leftward
 					player->x--;
+					lastTimeMoveUpdate = 300000;
 
 					// NOTE: save the new player state
 					playerSave(player);
@@ -732,9 +742,11 @@ int main(int argc, char *argv[]) {
 					// NOTE: get the player which is logged in on the incoming address
 					struct Player *player = getPlayerFromIP(packet.address);
 					if(player == NULL) break;
+					if(lastTimeMoveUpdate!=0) break;
 
 					// NOTE: perform a check to see if the player can move rightward
 					player->x++;
+					lastTimeMoveUpdate = 300000;
 
 					// NOTE: save the new player state
 					playerSave(player);

@@ -227,6 +227,7 @@ void networkPoll(void) {
 					if(id!=chrsOnline[i].id) continue;
 					if(chrsOnline[i].moveState.moving) continue;
 					if((chrsOnline[i].x-1)==nx) {
+						
 						chrsOnline[i].x = nx;
 						chrsOnline[i].moveState.x = 0;
 						chrsOnline[i].moveState.y = 0;
