@@ -134,15 +134,15 @@ void gfxInit(void) {
 	SDL_Surface *surface = SDL_LoadBMP("spritesheet.bmp");
 
 	int i, x, y;
-	SDL_Rect rect = {0, 0, 8, 8};
+	SDL_Rect rect = {0, 0, 8, 12};
 	for(i=0; i<NUM_SPRITES; i++) {
-		spritesheet[i] = SDL_CreateRGBSurface(0, 8, 8, 24, 0x00, 0x00, 0x00, 0x00);
+		spritesheet[i] = SDL_CreateRGBSurface(0, 8, 12, 24, 0x00, 0x00, 0x00, 0x00);
 		SDL_SetColorKey(spritesheet[i], 1, 0xFF00FF);
 		SDL_FillRect(spritesheet[i], 0, 0xFF00FF);
 		if(i!=0) {
 			x = (i-1)%(surface->w/8);
 			y = (i-x)/(surface->w/8);
-			rect.x = x*8, rect.y = y*8;
+			rect.x = x*8, rect.y = y*12;
 			SDL_BlitSurface(surface, &rect, spritesheet[i], NULL);
 		}
 	}
@@ -171,16 +171,16 @@ void gfxQuit(void) {
 //-----------------------------------------------------------------------------
 SDL_Surface* buildSprite(int w, int h, int inds[]) {
 	// NOTE: build a sprite surface to be drawn later
-	SDL_Surface *surface = SDL_CreateRGBSurface(0, 8*w, 8*h, 24, 0x00, 0x00, 0x00, 0x00);
+	SDL_Surface *surface = SDL_CreateRGBSurface(0, 8*w, 12*h, 24, 0x00, 0x00, 0x00, 0x00);
 
 	SDL_SetColorKey(surface, 1, 0xFF00FF);
 	SDL_FillRect(surface, 0, 0xFF00FF);
 
 	int i, j;
-	SDL_Rect rect = {0, 0, 8, 8};
+	SDL_Rect rect = {0, 0, 8, 12};
 	for(j=0; j<h; j++) {
 		for(i=0; i<w; i++) {
-			rect.x = i*8, rect.y = j*8;
+			rect.x = i*8, rect.y = j*12;
 			SDL_BlitSurface(spritesheet[inds[w*j+i]], NULL, surface, &rect);
 		}
 	}
@@ -244,7 +244,7 @@ void updateMoveState(struct Player *player) {
 	if(!player->moveState.canMove&&!player->moveState.moving) return;
 
 	player->moveState.i = floor(player->moveState.x/16.0f);
-	player->moveState.j = floor(player->moveState.y/16.0f);
+	player->moveState.j = floor(player->moveState.y/24.0f);
 
 	if(player->moveState.moveFrame>0) player->moveState.moveFrame--;
 	else if(player->moveState.moving) {

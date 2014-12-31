@@ -325,7 +325,7 @@ uint8_t getChrsOnline(struct Player **chrsOnline, uint32_t *numChrs, uint8_t ret
 				offset += 4;
 
 				chr->moveState.x = 0;
-				chr->moveState.y = -16;
+				chr->moveState.y = -24;
 				chr->moveState.canMove = SDL_TRUE;
 				chr->moveState.moving = SDL_TRUE;
 

@@ -76,7 +76,7 @@ void networkPoll(void) {
 				offset += 4;
 
 				chr->moveState.x = 0;
-				chr->moveState.y = -16;
+				chr->moveState.y = -24;
 				chr->moveState.canMove = SDL_TRUE;
 				chr->moveState.moving = SDL_FALSE;
 			} break;
@@ -145,7 +145,7 @@ void networkPoll(void) {
 						chrsOnline[i].moveState.y = 0;
 						
 						chrsOnline[i].moveState.moving = SDL_TRUE;
-						chrsOnline[i].moveState.moveFrame = 16;
+						chrsOnline[i].moveState.moveFrame = 24;
 						chrsOnline[i].moveState.moveDirec = 0;
 					} else {
 						// TODO: sent the server a warning about location mismatch and
@@ -156,7 +156,7 @@ void networkPoll(void) {
 						chrsOnline[i].moveState.y = 0;
 						
 						chrsOnline[i].moveState.moving = SDL_TRUE;
-						chrsOnline[i].moveState.moveFrame = 16;
+						chrsOnline[i].moveState.moveFrame = 24;
 						chrsOnline[i].moveState.moveDirec = 0;
 					}
 				}
@@ -189,7 +189,7 @@ void networkPoll(void) {
 						chrsOnline[i].moveState.y = 0;
 						
 						chrsOnline[i].moveState.moving = SDL_TRUE;
-						chrsOnline[i].moveState.moveFrame = 16;
+						chrsOnline[i].moveState.moveFrame = 24;
 						chrsOnline[i].moveState.moveDirec = 1;
 					} else {
 						// TODO: sent the server a warning about location mismatch and
@@ -200,7 +200,7 @@ void networkPoll(void) {
 						chrsOnline[i].moveState.y = 0;
 						
 						chrsOnline[i].moveState.moving = SDL_TRUE;
-						chrsOnline[i].moveState.moveFrame = 16;
+						chrsOnline[i].moveState.moveFrame = 24;
 						chrsOnline[i].moveState.moveDirec = 1;
 					}
 				}
