@@ -238,7 +238,6 @@ TODO:
 - fix it by skipping over packets that the server sends if that character is
 	still being animated
 - now I only seem to get the skip on a location mismatch
-
 - fixed the location mismatch by just responding to player messages less often
 
 % === %

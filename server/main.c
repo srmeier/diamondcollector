@@ -4,10 +4,6 @@ gcc main.c -o server -L./ -lSDL2main -lSDL2 -lSDL2_net -lsqlite3
 */
 
 //-----------------------------------------------------------------------------
-#define NODE_MAX 64
-#define PLAYER_MAX 32
-
-//-----------------------------------------------------------------------------
 #include <time.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -20,12 +16,12 @@ gcc main.c -o server -L./ -lSDL2main -lSDL2 -lSDL2_net -lsqlite3
 #include "sqlite3.h"
 
 //-----------------------------------------------------------------------------
-sqlite3 *database;
-UDPsocket serverFD;
-SDLNet_SocketSet socketSet;
+#include "player_manager.h"
 
 //-----------------------------------------------------------------------------
-#include "types.h"
+UDPsocket serverFD;
+PlayerManager *plManager;
+SDLNet_SocketSet socketSet;
 
 //-----------------------------------------------------------------------------
 int nodeToPing;
@@ -34,11 +30,6 @@ time_t timeOfPing;
 uint8_t serverState;
 SDL_bool waitingForPong;
 time_t lastTimePingsWentOut;
-
-struct Player players[NODE_MAX][PLAYER_MAX];    // 64 kilobytes
-SDL_bool playerIndexMask[NODE_MAX][PLAYER_MAX]; //  8 kilobytes
-
-int lastTimeMoveUpdate;
 
 uint8_t nodes[2][15][20] = {
 {
@@ -77,23 +68,12 @@ uint8_t nodes[2][15][20] = {
 }};
 
 //-----------------------------------------------------------------------------
-#include "login.h"
-#include "player.h"
-
-//-----------------------------------------------------------------------------
 void libInit(void);
 void libQuit(void);
 
 //-----------------------------------------------------------------------------
 int main(int argc, char *argv[]) {
 	libInit();
-
-	// NOTE: open database connection
-	if(sqlite3_open("diamond_collector.db", &database)) {
-		fprintf(stderr, "sqlite3_open: %s\n", sqlite3_errmsg(database));
-		sqlite3_close(database);
-		return -1;
-	}
 
 	// NOTE: open socket file descriptor
 	serverFD = SDLNet_UDP_Open(3490);
@@ -108,13 +88,14 @@ int main(int argc, char *argv[]) {
 	SDLNet_UDP_AddSocket(socketSet, serverFD);
 	printf("\nServer open on port: %d\n\n", 3490);
 
+	// NOTE: initialize the player manager
+	plManager = initPlayerManager("diamond_collector.db");
+
 	/*
 		LISTEN FOR PACKETS
 	*/
 
 	for(;;) {
-		if(lastTimeMoveUpdate>0) lastTimeMoveUpdate--;
-
 		// NOTE: wait for a connection
 		int n = SDLNet_CheckSockets(socketSet, 0);
 
@@ -122,6 +103,7 @@ int main(int argc, char *argv[]) {
 			fprintf(stderr, "SDLNet_CheckSockets: %s\n", SDLNet_GetError());
 			break;
 		} if(!n) {
+			/*
 			// NOTE: if the server doesn't have anything to do then run through
 			// a few regular routines
 			switch(serverState) {
@@ -147,11 +129,11 @@ int main(int argc, char *argv[]) {
 							// letting them know that the player is leaving.
 							UDPpacket _packet = {};
 
-							/*
+							
 							- flag (1) 0x05
 							- id   (4)
 							====== (5)
-							*/
+							
 
 							_packet.maxlen = 0x05; // 5 bytes
 							_packet.data = (uint8_t *)malloc(0x05);
@@ -267,6 +249,7 @@ int main(int argc, char *argv[]) {
 				} break;
 			}
 			continue;
+			*/
 		}
 
 		// NOTE: does the server have packets waiting?
@@ -299,12 +282,8 @@ int main(int argc, char *argv[]) {
 					uint32_t unLen = 0;
 					uint32_t pwLen = 0;
 
-					// NOTE: need to start with a fresh player struct because
-					// we can't get a free index until we know which node they are on
-					struct Player player = {};
-
-					player.host = packet.address.host;
-					player.port = packet.address.port;
+					char *username = NULL;
+					char *password = NULL;
 
 					/*
 					- flag     (1) 0x01
@@ -318,172 +297,183 @@ int main(int argc, char *argv[]) {
 					memcpy(&unLen, packet.data+offset, 4);
 					offset += 4;
 
-					player.username = (char *)malloc(unLen+1);
-					memcpy(player.username, packet.data+offset, unLen);
-					player.username[unLen] = '\0';
+					username = (char *)malloc(unLen+1);
+					memcpy(username, packet.data+offset, unLen);
+					username[unLen] = '\0';
 					offset += unLen;
 
 					memcpy(&pwLen, packet.data+offset, 4);
 					offset += 4;
 
-					player.password = (char *)malloc(pwLen+1);
-					memcpy(player.password, packet.data+offset, pwLen);
-					player.password[pwLen] = '\0';
+					password = (char *)malloc(pwLen+1);
+					memcpy(password, packet.data+offset, pwLen);
+					password[pwLen] = '\0';
 					offset += pwLen;
 
-					// NOTE: if the account doesn't exist the player state will
-					// remain 0xFE
-					player.state = 0xFE;
+					DB_Player *tempPl = pl_allocUN(plManager, username);
 
-					// NOTE: check that the player's password matches and that
-					// the account isn't currently in use
-					switch(playerLogin(&player)) {
-						case 0x00: {
-							// NOTE: player.state = 0x00 on password match
-							printf("\nLogin success!\n");
+					if(tempPl == NULL) {
+						// NOTE: let client know that user doesn't exist
+						printf("non-existent account\n");
 
-							// NOTE: set the player's new state to online idle
-							player.state = 0x01;
+						uint8_t _flag = 0x01;
+						UDPpacket _packet = {};
 
-							printf("X        -> %d\n", player.x);
-							printf("Y        -> %d\n", player.y);
-							printf("ID       -> %d\n", player.id);
-							printf("Node     -> %d\n", player.node);
-							printf("Username -> %s\n", player.username);
-							printf("Password -> %s\n", player.password);
-							printf("State    -> %d\n", player.state);
-							printf("Count    -> %d\n\n", player.count);
+						_packet.data = &_flag;
 
-							int ind = getFreePlayerIndex(player.node);
+						_packet.len = 1;
+						_packet.maxlen = 1;
+						_packet.address = packet.address;
 
-							if(ind==-1) {
-								// NOTE: the node is full
-								// TODO: handle this
-							} else if(ind==-2) {
-								// NOTE: the player's node location is corrupt
-								// TODO: handle this
-							} else {
-								// NOTE: send a packet out to everyone on this node
-								// letting them know that the player is joining
-								UDPpacket _packet = {};
+						if(!SDLNet_UDP_Send(serverFD, -1, &_packet))
+							fprintf(stderr, "SDLNet_UDP_Send: %s\n", SDLNet_GetError());
 
-								/*
-								- flag         (1) 0x03/0x04
-								- state        (4)
-								- id           (4)
-								- node         (4)
-								- x            (4)
-								- y            (4)
-								- count        (4)
-								============== (25)
-								*/
+						free(username);
+						free(password);
 
-								_packet.maxlen = 0x19; // 25 bytes
-								_packet.data = (uint8_t *)malloc(0x19);
+						break;
+					}
 
-								uint8_t offset = 0;
+					if(tempPl->state != 0x00) {
+						// NOTE: the account is currently in use
+						printf("account in use\n");
 
-								memset(_packet.data+offset, 0x03, 1);
-								offset += 1;
-								memcpy(_packet.data+offset, &player.state, 4);
-								offset += 4;
-								memcpy(_packet.data+offset, &player.id, 4);
-								offset += 4;
-								memcpy(_packet.data+offset, &player.node, 4);
-								offset += 4;
-								memcpy(_packet.data+offset, &player.x, 4);
-								offset += 4;
-								memcpy(_packet.data+offset, &player.y, 4);
-								offset += 4;
-								memcpy(_packet.data+offset, &player.count, 4);
-								offset += 4;
+						uint8_t _flag = 0x02;
+						UDPpacket _packet = {};
 
-								// NOTE: set the packet length to the offset point
-								_packet.len = offset;
+						_packet.data = &_flag;
 
-								// NOTE: send the packet to the connecting player so
-								// they know which character is theirs
-								_packet.address = packet.address;
+						_packet.len = 1;
+						_packet.maxlen = 1;
+						_packet.address = packet.address;
+
+						if(!SDLNet_UDP_Send(serverFD, -1, &_packet))
+							fprintf(stderr, "SDLNet_UDP_Send: %s\n", SDLNet_GetError());
+
+						free(username);
+						free(password);
+
+						pl_free(tempPl);
+
+						break;
+					}
+					
+					if(!strcmp(password, tempPl->password)) {
+
+						tempPl->host = packet.address.host;
+						tempPl->port = packet.address.port;
+
+						int ind = pl_addPlayer(plManager, tempPl);
+
+						if(ind != -1) {
+							DB_Player *pl = &plManager->pl_dbInfo[tempPl->node][ind];
+
+							pl->state = 0x01;
+							pl_save(plManager, pl);
+
+							printf("successful login:\n");
+							printf("X        -> %d\n", pl->x);
+							printf("Y        -> %d\n", pl->y);
+							printf("ID       -> %d\n", pl->id);
+							printf("Node     -> %d\n", pl->node);
+							printf("Username -> %s\n", pl->username);
+							printf("Password -> %s\n", pl->password);
+							printf("State    -> %d\n", pl->state);
+							printf("Count    -> %d\n\n", pl->count);
+
+							// NOTE: send a packet out to everyone on this node
+							// letting them know that the player is joining
+							UDPpacket _packet = {};
+
+							/*
+							- flag         (1) 0x03/0x04
+							- state        (4)
+							- id           (4)
+							- node         (4)
+							- x            (4)
+							- y            (4)
+							- count        (4)
+							============== (25)
+							*/
+							
+							_packet.maxlen = 0x19; // 25 bytes
+							_packet.data = (uint8_t *)malloc(0x19);
+
+							uint8_t offset = 0;
+
+							memset(_packet.data+offset, 0x03, 1);
+							offset += 1;
+							memcpy(_packet.data+offset, &pl->state, 4);
+							offset += 4;
+							memcpy(_packet.data+offset, &pl->id, 4);
+							offset += 4;
+							memcpy(_packet.data+offset, &pl->node, 4);
+							offset += 4;
+							memcpy(_packet.data+offset, &pl->x, 4);
+							offset += 4;
+							memcpy(_packet.data+offset, &pl->y, 4);
+							offset += 4;
+							memcpy(_packet.data+offset, &pl->count, 4);
+							offset += 4;
+
+							// NOTE: set the packet length to the offset point
+							_packet.len = offset;
+
+							// NOTE: send the packet to the connecting player so
+							// they know which character is theirs
+							_packet.address = packet.address;
+
+							if(!SDLNet_UDP_Send(serverFD, -1, &_packet))
+								fprintf(stderr, "SDLNet_UDP_Send: %s\n", SDLNet_GetError());
+
+							// NOTE: set the flag to 0x04 so everyone else treats it as a
+							// new connection
+							memset(_packet.data, 0x04, 1);
+
+							// NOTE: send the packet out to everyone
+							int i;
+							for(i=0; i<PLAYER_MAX; i++) {
+								if(!plManager->pl_indMask[pl->node][i])
+									continue;
+
+								_packet.address.host = plManager->pl_dbInfo[pl->node][i].host;
+								_packet.address.port = plManager->pl_dbInfo[pl->node][i].port;
 
 								if(!SDLNet_UDP_Send(serverFD, -1, &_packet))
 									fprintf(stderr, "SDLNet_UDP_Send: %s\n", SDLNet_GetError());
-
-								// NOTE: set the flag to 0x04 so everyone else treats it as a
-								// new connection
-								memset(_packet.data, 0x04, 1);
-
-								// NOTE: send the packet out to everyone
-								int i;
-								for(i=0; i<PLAYER_MAX; i++) {
-									if(!playerIndexMask[player.node][i])
-										continue;
-
-									_packet.address.host = players[player.node][i].host;
-									_packet.address.port = players[player.node][i].port;
-
-									if(!SDLNet_UDP_Send(serverFD, -1, &_packet))
-										fprintf(stderr, "SDLNet_UDP_Send: %s\n", SDLNet_GetError());
-								}
-
-								// NOTE: free the packet
-								free(_packet.data);
-
-								// NOTE: add the player to the internal server node memory
-								memcpy(&players[player.node][ind], &player, sizeof(struct Player));
-
-								// NOTE: set the index mask to true
-								playerIndexMask[player.node][ind] = SDL_TRUE;
-
-								// NOTE: save the new player state
-								playerSave(&player);
 							}
-						} break;
-						case 0xFE:
-							// NOTE: currently treating non-existent account like a password mismatch
-						case 0xFF: {
-							// NOTE: player.state = 0xFF on password mismatch
-							printf("Incorrect password / non-existent account.\n");
 
-							uint8_t flag = 0x01;
-							UDPpacket _packet = {};
+							// NOTE: free the packet
+							free(_packet.data);
+						} else {
+							// TODO: let client know that node is full
+						}
+					} else {
+						// NOTE: let client know that the password is incorrect
+						printf("incorrect password\n");
 
-							_packet.data = &flag;
+						uint8_t _flag = 0x01;
+						UDPpacket _packet = {};
 
-							_packet.len = 1;
-							_packet.maxlen = 1;
-							_packet.address = packet.address;
+						_packet.data = &_flag;
 
-							if(!SDLNet_UDP_Send(serverFD, -1, &_packet))
-								fprintf(stderr, "SDLNet_UDP_Send: %s\n", SDLNet_GetError());
+						_packet.len = 1;
+						_packet.maxlen = 1;
+						_packet.address = packet.address;
 
-							free(player.username);
-							free(player.password);
-						} break;
-						default: {
-							// NOTE: player.state > 0x00 if password matches but the account is in use
-							printf("Account in use.\n");
-
-							uint8_t flag = 0x02;
-							UDPpacket _packet = {};
-
-							_packet.data = &flag;
-
-							_packet.len = 1;
-							_packet.maxlen = 1;
-							_packet.address = packet.address;
-
-							if(!SDLNet_UDP_Send(serverFD, -1, &_packet))
-								fprintf(stderr, "SDLNet_UDP_Send: %s\n", SDLNet_GetError());
-
-							free(player.username);
-							free(player.password);
-						} break;
+						if(!SDLNet_UDP_Send(serverFD, -1, &_packet))
+							fprintf(stderr, "SDLNet_UDP_Send: %s\n", SDLNet_GetError());
 					}
+
+					free(username);
+					free(password);
+
+					pl_free(tempPl);
 				} break;
 				case 0x02: {
 					// NOTE: get the player which is logged in on the incoming address
-					struct Player *player = getPlayerFromIP(packet.address);
-					if(player == NULL) break;
+					DB_Player *pl = pl_allocIP(plManager, packet.address);
+					if(pl == NULL) break;
 
 					uint32_t unLen = 0;
 					uint32_t pwLen = 0;
@@ -508,8 +498,8 @@ int main(int argc, char *argv[]) {
 					offset += pwLen;
 
 					// NOTE: check that the information matches
-					int check00 = !strcmp(username, player->username);
-					int check01 = !strcmp(password, player->password);
+					int check00 = !strcmp(username, pl->username);
+					int check01 = !strcmp(password, pl->password);
 
 					// NOTE: free the packet username and password
 					free(username);
@@ -517,8 +507,11 @@ int main(int argc, char *argv[]) {
 
 					// NOTE: check that the information matches
 					if(check00 && check01)
-						player->state = 0x00;
-					else break;
+						pl->state = 0x00;
+					else {
+						pl_free(pl);
+						break;
+					}
 
 					// NOTE: send a packet out to everyone on this node
 					// letting them know that the player is leaving.
@@ -537,7 +530,7 @@ int main(int argc, char *argv[]) {
 
 					memset(_packet.data+offset, 0x05, 1);
 					offset += 1;
-					memcpy(_packet.data+offset, &player->id, 4);
+					memcpy(_packet.data+offset, &pl->id, 4);
 					offset += 4;
 
 					// NOTE: set the packet length to the offset point
@@ -546,14 +539,14 @@ int main(int argc, char *argv[]) {
 					// NOTE: send the packet out to everyone but the player disconnecting
 					int i;
 					for(i=0; i<PLAYER_MAX; i++) {
-						if(!playerIndexMask[player->node][i])
+						if(!plManager->pl_indMask[pl->node][i])
 							continue;
 
-						_packet.address.host = players[player->node][i].host;
-						_packet.address.port = players[player->node][i].port;
+						_packet.address.host = plManager->pl_dbInfo[pl->node][i].host;
+						_packet.address.port = plManager->pl_dbInfo[pl->node][i].port;
 
-						check00 = packet.address.host==players[player->node][i].host;
-						check01 = packet.address.port==players[player->node][i].port;
+						check00 = packet.address.host==plManager->pl_dbInfo[pl->node][i].host;
+						check01 = packet.address.port==plManager->pl_dbInfo[pl->node][i].port;
 
 						if(check00 && check01)
 							continue;
@@ -565,47 +558,44 @@ int main(int argc, char *argv[]) {
 					// NOTE: free the packet
 					free(_packet.data);
 
-					// NOTE: save the new player state
-					playerSave(player);
+					// NOTE: save the disconnecting player state
+					pl_save(plManager, pl);
 
-					free(player->username);
-					free(player->password);
-
-					// NOTE: get the index of the player on the node
-					int ind = getPlayerIndex(player);
-					if(ind>=0) {
-						// NOTE: free the index in the index mask
-						playerIndexMask[player->node][ind] = SDL_FALSE;
-
-						// NOTE: remove the player from the players array
-						memset(player, 0x00, sizeof(struct Player));
+					// NOTE: remove the player from the array of managed players
+					if(pl_removePlayer(plManager, pl) != -1) {
 						printf("Logout success!\n");
 					} else {
-						// NOTE: player was never in the players array should
-						// probably log this sort of thing
+						// NOTE: player was never added
 					}
+
+					pl_free(pl);
 				} break;
 				case 0x07: {
 					// NOTE: get the player which is logged in on the incoming address
-					struct Player *player = getPlayerFromIP(packet.address);
-					if(player == NULL) break;
-					if(lastTimeMoveUpdate!=0) break;
+					DB_Player *pl = pl_getDBInfo(plManager, packet.address);
+					if(pl == NULL) break;
+
+					if(!pl_checkMoveTimer(plManager, pl)) break;
 
 					// NOTE: perform a check to see if the player can move upward
-					player->y--;
-					lastTimeMoveUpdate = 300000;
+					if(nodes[pl->node][(pl->y-1)][pl->x]==1) break;
+
+					pl->y--;
+
+					int ind = pl_getIndex(plManager, pl);
+					plManager->pl_lMoveTime[pl->node][ind] = SDL_GetTicks();
 
 					// NOTE: save the new player state
-					playerSave(player);
+					pl_save(plManager, pl);
 
 					// NOTE: let everyone know that the player has moved upward
 					int i;
 					for(i=0; i<PLAYER_MAX; i++) {
-						if(!playerIndexMask[player->node][i])
+						if(!plManager->pl_indMask[pl->node][i])
 							continue;
 
 						UDPpacket _packet = {};
-						struct Player *tempPlayer = &players[player->node][i];
+						DB_Player *tempPl = &plManager->pl_dbInfo[pl->node][i];
 
 						/*
 						- flag (1) 0x06
@@ -621,14 +611,14 @@ int main(int argc, char *argv[]) {
 
 						memset(_packet.data+offset, 0x06, 1);
 						offset += 1;
-						memcpy(_packet.data+offset, &player->id, 4);
+						memcpy(_packet.data+offset, &pl->id, 4);
 						offset += 4;
-						memcpy(_packet.data+offset, &player->y, 4);
+						memcpy(_packet.data+offset, &pl->y, 4);
 						offset += 4;
 
 						_packet.len = offset;
-						_packet.address.host = players[player->node][i].host;
-						_packet.address.port = players[player->node][i].port;
+						_packet.address.host = tempPl->host;
+						_packet.address.port = tempPl->port;
 
 						if(!SDLNet_UDP_Send(serverFD, -1, &_packet))
 							fprintf(stderr, "SDLNet_UDP_Send: %s\n", SDLNet_GetError());
@@ -638,25 +628,30 @@ int main(int argc, char *argv[]) {
 				} break;
 				case 0x08: {
 					// NOTE: get the player which is logged in on the incoming address
-					struct Player *player = getPlayerFromIP(packet.address);
-					if(player == NULL) break;
-					if(lastTimeMoveUpdate!=0) break;
+					DB_Player *pl = pl_getDBInfo(plManager, packet.address);
+					if(pl == NULL) break;
+
+					if(!pl_checkMoveTimer(plManager, pl)) break;
 
 					// NOTE: perform a check to see if the player can move downward
-					player->y++;
-					lastTimeMoveUpdate = 300000;
+					if(nodes[pl->node][(pl->y+1)][pl->x]==1) break;
+
+					pl->y++;
+
+					int ind = pl_getIndex(plManager, pl);
+					plManager->pl_lMoveTime[pl->node][ind] = SDL_GetTicks();
 
 					// NOTE: save the new player state
-					playerSave(player);
+					pl_save(plManager, pl);
 
-					// NOTE: let everyone know that the player has moved upward
+					// NOTE: let everyone know that the player has moved downward
 					int i;
 					for(i=0; i<PLAYER_MAX; i++) {
-						if(!playerIndexMask[player->node][i])
+						if(!plManager->pl_indMask[pl->node][i])
 							continue;
 
 						UDPpacket _packet = {};
-						struct Player *tempPlayer = &players[player->node][i];
+						DB_Player *tempPl = &plManager->pl_dbInfo[pl->node][i];
 
 						/*
 						- flag (1) 0x07
@@ -672,14 +667,14 @@ int main(int argc, char *argv[]) {
 
 						memset(_packet.data+offset, 0x07, 1);
 						offset += 1;
-						memcpy(_packet.data+offset, &player->id, 4);
+						memcpy(_packet.data+offset, &pl->id, 4);
 						offset += 4;
-						memcpy(_packet.data+offset, &player->y, 4);
+						memcpy(_packet.data+offset, &pl->y, 4);
 						offset += 4;
 
 						_packet.len = offset;
-						_packet.address.host = players[player->node][i].host;
-						_packet.address.port = players[player->node][i].port;
+						_packet.address.host = tempPl->host;
+						_packet.address.port = tempPl->port;
 
 						if(!SDLNet_UDP_Send(serverFD, -1, &_packet))
 							fprintf(stderr, "SDLNet_UDP_Send: %s\n", SDLNet_GetError());
@@ -689,25 +684,30 @@ int main(int argc, char *argv[]) {
 				} break;
 				case 0x09: {
 					// NOTE: get the player which is logged in on the incoming address
-					struct Player *player = getPlayerFromIP(packet.address);
-					if(player == NULL) break;
-					if(lastTimeMoveUpdate!=0) break;
+					DB_Player *pl = pl_getDBInfo(plManager, packet.address);
+					if(pl == NULL) break;
+
+					if(!pl_checkMoveTimer(plManager, pl)) break;
 
 					// NOTE: perform a check to see if the player can move leftward
-					player->x--;
-					lastTimeMoveUpdate = 300000;
+					if(nodes[pl->node][pl->y][(pl->x-1)]==1) break;
+
+					pl->x--;
+
+					int ind = pl_getIndex(plManager, pl);
+					plManager->pl_lMoveTime[pl->node][ind] = SDL_GetTicks();
 
 					// NOTE: save the new player state
-					playerSave(player);
+					pl_save(plManager, pl);
 
-					// NOTE: let everyone know that the player has moved upward
+					// NOTE: let everyone know that the player has moved leftward
 					int i;
 					for(i=0; i<PLAYER_MAX; i++) {
-						if(!playerIndexMask[player->node][i])
+						if(!plManager->pl_indMask[pl->node][i])
 							continue;
 
 						UDPpacket _packet = {};
-						struct Player *tempPlayer = &players[player->node][i];
+						DB_Player *tempPl = &plManager->pl_dbInfo[pl->node][i];
 
 						/*
 						- flag (1) 0x08
@@ -723,14 +723,14 @@ int main(int argc, char *argv[]) {
 
 						memset(_packet.data+offset, 0x08, 1);
 						offset += 1;
-						memcpy(_packet.data+offset, &player->id, 4);
+						memcpy(_packet.data+offset, &pl->id, 4);
 						offset += 4;
-						memcpy(_packet.data+offset, &player->x, 4);
+						memcpy(_packet.data+offset, &pl->x, 4);
 						offset += 4;
 
 						_packet.len = offset;
-						_packet.address.host = players[player->node][i].host;
-						_packet.address.port = players[player->node][i].port;
+						_packet.address.host = tempPl->host;
+						_packet.address.port = tempPl->port;
 
 						if(!SDLNet_UDP_Send(serverFD, -1, &_packet))
 							fprintf(stderr, "SDLNet_UDP_Send: %s\n", SDLNet_GetError());
@@ -740,25 +740,30 @@ int main(int argc, char *argv[]) {
 				} break;
 				case 0x0A: {
 					// NOTE: get the player which is logged in on the incoming address
-					struct Player *player = getPlayerFromIP(packet.address);
-					if(player == NULL) break;
-					if(lastTimeMoveUpdate!=0) break;
+					DB_Player *pl = pl_getDBInfo(plManager, packet.address);
+					if(pl == NULL) break;
+
+					if(!pl_checkMoveTimer(plManager, pl)) break;
 
 					// NOTE: perform a check to see if the player can move rightward
-					player->x++;
-					lastTimeMoveUpdate = 300000;
+					if(nodes[pl->node][pl->y][(pl->x+1)]==1) break;
+
+					pl->x++;
+
+					int ind = pl_getIndex(plManager, pl);
+					plManager->pl_lMoveTime[pl->node][ind] = SDL_GetTicks();
 
 					// NOTE: save the new player state
-					playerSave(player);
+					pl_save(plManager, pl);
 
-					// NOTE: let everyone know that the player has moved upward
+					// NOTE: let everyone know that the player has moved rightward
 					int i;
 					for(i=0; i<PLAYER_MAX; i++) {
-						if(!playerIndexMask[player->node][i])
+						if(!plManager->pl_indMask[pl->node][i])
 							continue;
 
 						UDPpacket _packet = {};
-						struct Player *tempPlayer = &players[player->node][i];
+						DB_Player *tempPl = &plManager->pl_dbInfo[pl->node][i];
 
 						/*
 						- flag (1) 0x09
@@ -774,14 +779,14 @@ int main(int argc, char *argv[]) {
 
 						memset(_packet.data+offset, 0x09, 1);
 						offset += 1;
-						memcpy(_packet.data+offset, &player->id, 4);
+						memcpy(_packet.data+offset, &pl->id, 4);
 						offset += 4;
-						memcpy(_packet.data+offset, &player->x, 4);
+						memcpy(_packet.data+offset, &pl->x, 4);
 						offset += 4;
 
 						_packet.len = offset;
-						_packet.address.host = players[player->node][i].host;
-						_packet.address.port = players[player->node][i].port;
+						_packet.address.host = tempPl->host;
+						_packet.address.port = tempPl->port;
 
 						if(!SDLNet_UDP_Send(serverFD, -1, &_packet))
 							fprintf(stderr, "SDLNet_UDP_Send: %s\n", SDLNet_GetError());
@@ -791,16 +796,16 @@ int main(int argc, char *argv[]) {
 				} break;
 				case 0x0B: {
 					// NOTE: get the player which is logged in on the incoming address
-					struct Player *player = getPlayerFromIP(packet.address);
-					if(player == NULL) break;
+					DB_Player *pl = pl_allocIP(plManager, packet.address);
+					if(pl == NULL) break;
 
 					// NOTE: notify client of how many players are being sent
-					uint32_t numOnNode = getNumOnNode(player->node);
+					int n = pl_numOnNode(plManager, pl->node);
 					UDPpacket _packet0 = {};
 
 					_packet0.data = (uint8_t *)malloc(0x04);
 
-					memcpy(_packet0.data, &numOnNode, 4);
+					memcpy(_packet0.data, &n, 4);
 
 					_packet0.len = 4;
 					_packet0.maxlen = 4;
@@ -814,11 +819,11 @@ int main(int argc, char *argv[]) {
 					// (could just be new to the node)
 					int i;
 					for(i=0; i<PLAYER_MAX; i++) {
-						if(!playerIndexMask[player->node][i])
+						if(!plManager->pl_indMask[pl->node][i])
 							continue;
 
 						UDPpacket _packet1 = {};
-						struct Player *tempPlayer = &players[player->node][i];
+						DB_Player *tempPl = &plManager->pl_dbInfo[pl->node][i];
 
 						/*
 						- state (4)
@@ -835,17 +840,17 @@ int main(int argc, char *argv[]) {
 
 						uint8_t offset = 0;
 
-						memcpy(_packet1.data+offset, &tempPlayer->state, 4);
+						memcpy(_packet1.data+offset, &tempPl->state, 4);
 						offset += 4;
-						memcpy(_packet1.data+offset, &tempPlayer->id, 4);
+						memcpy(_packet1.data+offset, &tempPl->id, 4);
 						offset += 4;
-						memcpy(_packet1.data+offset, &tempPlayer->node, 4);
+						memcpy(_packet1.data+offset, &tempPl->node, 4);
 						offset += 4;
-						memcpy(_packet1.data+offset, &tempPlayer->x, 4);
+						memcpy(_packet1.data+offset, &tempPl->x, 4);
 						offset += 4;
-						memcpy(_packet1.data+offset, &tempPlayer->y, 4);
+						memcpy(_packet1.data+offset, &tempPl->y, 4);
 						offset += 4;
-						memcpy(_packet1.data+offset, &tempPlayer->count, 4);
+						memcpy(_packet1.data+offset, &tempPl->count, 4);
 						offset += 4;
 
 						_packet1.len = offset;
@@ -856,25 +861,29 @@ int main(int argc, char *argv[]) {
 
 						free(_packet1.data);
 					}
+
+					pl_free(pl);
 				} break;
 				case 0x0C: {
 					// NOTE: get the player which is logged in on the incoming address
-					struct Player *player = getPlayerFromIP(packet.address);
-					if(player == NULL) break;
+					DB_Player *pl = pl_allocIP(plManager, packet.address);
+					if(pl == NULL) break;
 
 					// NOTE: need to make sure the pong is from the right player
-					int ind = getPlayerIndex(player);
+					int ind = pl_getIndex(plManager, pl);
 
 					// NOTE: player responding with a pong packet
 					if(ind==playerToPing) {
 						playerToPing++;
 						waitingForPong = SDL_FALSE;
 					}
+
+					pl_free(pl);
 				} break;
 				case 0x0D: {
 					// NOTE: get the player which is logged in on the incoming address
-					struct Player *player = getPlayerFromIP(packet.address);
-					if(player == NULL) break;
+					DB_Player *pl = pl_allocIP(plManager, packet.address);
+					if(pl == NULL) break;
 
 					// NOTE: send the spriteIDs for the node position to the client
 					UDPpacket _packet = {};
@@ -896,7 +905,7 @@ int main(int argc, char *argv[]) {
 					int i, j;
 					for(j=0; j<15; j++) {
 						for(i=0; i<20; i++) {
-							memcpy(_packet.data+offset, &nodes[player->node][j][i], 1);
+							memcpy(_packet.data+offset, &nodes[pl->node][j][i], 1);
 							offset += 1;
 						}
 					}
@@ -912,6 +921,8 @@ int main(int argc, char *argv[]) {
 
 					// NOTE: free the packet
 					free(_packet.data);
+
+					pl_free(pl);
 				} break;
 			}
 
@@ -920,14 +931,14 @@ int main(int argc, char *argv[]) {
 		}
 	}
 
+	// NOTE: free the player manager
+	freePlayerManager(plManager);
+
 	// NOTE: free socketset
 	SDLNet_FreeSocketSet(socketSet);
 
 	// NOTE: close the socket file descriptor
 	SDLNet_UDP_Close(serverFD);
-
-	// NOTE: close database connection
-	sqlite3_close(database);
 
 	libQuit();
 
