@@ -412,8 +412,8 @@ uint8_t getNodeSpriteIDs(uint8_t retCode) {
 
 			if(SDLNet_SocketReady(clientFD)) {
 				UDPpacket packet = {};
-				packet.maxlen = 300+1;
-				packet.data = (uint8_t *)malloc(300+1);
+				packet.maxlen = 30*15+1;
+				packet.data = (uint8_t *)malloc(30*15+1);
 
 				// NOTE: get packet
 				int recv = SDLNet_UDP_Recv(clientFD, &packet);
@@ -438,7 +438,7 @@ uint8_t getNodeSpriteIDs(uint8_t retCode) {
 				if(flag==0x0B) {
 					int i, j;
 					for(j=0; j<15; j++) {
-						for(i=0; i<20; i++) {
+						for(i=0; i<30; i++) {
 							memcpy(&nodeGrid[j][i], packet.data+offset, 1);
 							offset += 1;
 						}

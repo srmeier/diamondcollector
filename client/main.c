@@ -13,13 +13,11 @@ gcc main.c -o client.exe -I./include -L./lib -lmingw32 -lSDL2main -lSDL2 -lSDL2_
 #include <SDL2/SDL_net.h>
 
 //-----------------------------------------------------------------------------
-//#define SCREEN_W 320 // 40 -> 20
-//#define SCREEN_H 240 // 30 -> 15
 #define SCREEN_W 480 // 60 -> 30
 #define SCREEN_H 360 // 30 -> 15
 #define NUM_SPRITES 1025
 #define SCREEN_NAME "Prototype"
-#define SCREEN_SCALE 2
+#define SCREEN_SCALE 1
 
 /* NOTE: engine variables */
 //-----------------------------------------------------------------------------
@@ -58,7 +56,7 @@ SDL_Surface *spritesheet[NUM_SPRITES];
 //-----------------------------------------------------------------------------
 uint32_t numChrs;
 struct Player mainChr;
-uint8_t nodeGrid[15][20];
+uint8_t nodeGrid[15][30];
 struct Player *chrsOnline;
 
 /* NOTE: instance includes */
@@ -82,6 +80,11 @@ int main(int argc, char *argv[]) {
 		 1,  2,
 		33, 34
 	}; SDL_Surface *test = buildSprite(2, 2, testInds);
+
+	int testInds0[4] = {
+		 3,  4,
+		35, 36
+	}; SDL_Surface *test0 = buildSprite(2, 2, testInds0);
 
 	uint32_t unSize = 1;
 	char *username = (char *)malloc(unSize+1);
@@ -318,10 +321,10 @@ int main(int argc, char *argv[]) {
 
 				// NOTE: draw everything
 				for(j=0; j<15; j++) {
-					for(i=0; i<20; i++) {
+					for(i=0; i<30; i++) {
 						if(nodeGrid[j][i]==0x01) {
 							SDL_Rect rect = {8*2*i, 12*2*j, 8*2, 12*2};
-							SDL_BlitSurface(test, NULL, screen, &rect);
+							SDL_BlitSurface(test0, NULL, screen, &rect);
 						}
 					}
 				}
