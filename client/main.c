@@ -17,7 +17,7 @@ gcc main.c -o client.exe -I./include -L./lib -lmingw32 -lSDL2main -lSDL2 -lSDL2_
 #define SCREEN_H 240 // 30 -> 15
 #define NUM_SPRITES 1025
 #define SCREEN_NAME "Prototype"
-#define SCREEN_SCALE 1
+#define SCREEN_SCALE 2
 
 /* NOTE: engine variables */
 //-----------------------------------------------------------------------------

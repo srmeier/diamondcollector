@@ -139,8 +139,11 @@ int pl_loadCB(void *data, int argc, char *argv[], char *colName[]) {
 
 	int i;
 	for(i=0; i<argc; i++) {
+		// NOTE: the unique player id within the database
 		if(!strcmp(colName[i], "id"))
 			pl->id = (uint32_t) atoi(argv[i]);
+
+		// NOTE: the player's username
 		if(!strcmp(colName[i], "username")) {
 			int unLen = strlen(argv[i]);
 
@@ -148,6 +151,8 @@ int pl_loadCB(void *data, int argc, char *argv[], char *colName[]) {
 			memcpy(pl->username, argv[i], sizeof(char)*unLen);
 			pl->username[unLen] = '\0';
 		}
+
+		// NOTE: the player's password
 		if(!strcmp(colName[i], "password")) {
 			int pwLen = strlen(argv[i]);
 
@@ -155,18 +160,32 @@ int pl_loadCB(void *data, int argc, char *argv[], char *colName[]) {
 			memcpy(pl->password, argv[i], sizeof(char)*pwLen);
 			pl->password[pwLen] = '\0';
 		}
+
+		// NOTE: the number of diamonds that the player possesses
 		if(!strcmp(colName[i], "count"))
 			pl->count = (uint32_t) atoi(argv[i]);
+
+		// NOTE: the current state of the player
 		if(!strcmp(colName[i], "state"))
 			pl->state = (uint32_t) atoi(argv[i]);
+
+		// NOTE: the IP host name for the player
 		if(!strcmp(colName[i], "host"))
 			pl->host = (uint32_t) atoi(argv[i]);
+
+		// NOTE: for port for the player connection
 		if(!strcmp(colName[i], "port"))
 			pl->port = (uint32_t) atoi(argv[i]);
+
+		// NOTE: the current node whic the player is on
 		if(!strcmp(colName[i], "node"))
 			pl->node = (uint32_t) atoi(argv[i]);
+
+		// NOTE: the x coordinate for the player
 		if(!strcmp(colName[i], "x"))
 			pl->x = (uint32_t) atoi(argv[i]);
+
+		// NOTE: the y coordinate for the player
 		if(!strcmp(colName[i], "y"))
 			pl->y = (uint32_t) atoi(argv[i]);
 	}

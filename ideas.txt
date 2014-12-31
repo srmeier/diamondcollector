@@ -239,5 +239,11 @@ TODO:
 	still being animated
 - now I only seem to get the skip on a location mismatch
 - fixed the location mismatch by just responding to player messages less often
+- instead of having memory allocated on each packet the then set within the
+	stack memory I should just work with the stack memory and only set the
+	index when everything works out fine - else free() the char pointers
+- but I need to know the node that the player is on before getting a free ind
+- that's really the point of pl_getDBInfo()
+- should use pl_getDBInfo() everywhere that's possible
 
 % === %
