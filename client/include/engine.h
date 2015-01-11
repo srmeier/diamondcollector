@@ -2,13 +2,13 @@
 #define __ENGINE_H_
 
 //-----------------------------------------------------------------------------
-#define SPRITE_w 8
+#define SPRITE_W 8
 #define SPRITE_H 8
 #define SCREEN_W 480
 #define SCREEN_H 360
 #define NUM_SPRITES 960
-#define SCREEN_NAME "Prototype"
-#define SCREEN_SCALE 1
+#define SCREEN_NAME "Client"
+#define SCREEN_SCALE 2
 
 //-----------------------------------------------------------------------------
 typedef enum {
@@ -17,19 +17,7 @@ typedef enum {
 	QUIT = 0xFF
 } GAME_STATE;
 
-struct {
-	SDL_bool running;
-	GAME_STATE state;
-	SDL_Window *window;
-	SDL_Renderer *renderer;
-	struct {
-		TTF_Font *font;
-		SDL_Surface *screen;
-		SDL_Texture *texture;
-		SDL_Surface *sprites[NUM_SPRITES];
-	} gfx;
-} Game = {};
-
+//-----------------------------------------------------------------------------
 typedef struct {
 	SDL_bool a_chk;
 	SDL_bool a_bnt;
@@ -45,45 +33,61 @@ typedef struct {
 	SDL_bool right_arw;
 } Input;
 
-/* NOTE: engine variables */
-//-----------------------------------------------------------------------------
-SDL_bool aChk;
-SDL_bool bChk;
-SDL_bool upChk;
-SDL_bool downChk;
-SDL_bool leftChk;
-SDL_bool rightChk;
-
-SDL_bool aBnt;
-SDL_bool bBnt;
-SDL_bool upBnt;
-SDL_bool downBnt;
-SDL_bool leftBnt;
-SDL_bool rightBnt;
-
-int gameState;
-TTF_Font *font8;
-SDL_bool running;
-int serverChannel;
-IPaddress serverIp;
-UDPsocket clientFD;
-SDL_Window *window;
-SDL_Surface *screen;
-SDL_Renderer *renderer;
-SDLNet_SocketSet socketSet;
-SDL_Surface *spritesheet[NUM_SPRITES];
+typedef struct {
+	int x, y;
+	int i, j;
+	int moveframe;
+	int movedirec;
+	SDL_bool moving;
+} MoveState;
 
 //-----------------------------------------------------------------------------
-void libInit(void) {
+class Level {
+public:
+	virtual void update(void) = 0;
+	virtual void render(void) = 0;
+};
+
+class UserInterface {
+public:
+	virtual void update(void) = 0;
+	virtual void render(void) = 0;
+};
+
+//-----------------------------------------------------------------------------
+struct {
+	Level *level;
+	SDL_bool running;
+	GAME_STATE state;
+	SDL_Window *window;
+	SDL_Renderer *renderer;
+	struct {
+		Input input;
+		MoveState moveState;
+		SDL_Surface *sprite;
+		SDL_Surface *shadow;
+	} player;
+	struct {
+		TTF_Font *font;
+		SDL_Surface *screen;
+		SDL_Texture *texture;
+		SDL_Surface *sprites[NUM_SPRITES];
+	} gfx;
+	struct {
+		UDPsocket socket;
+		SDLNet_SocketSet set;
+		struct {
+			int channel;
+			IPaddress ip;
+		} server;
+	} net;
+} Game = {};
+
+//-----------------------------------------------------------------------------
+void startGame(void) {
 	// NOTE: initialize SDL2
 	if(SDL_Init(SDL_INIT_EVERYTHING)!=0) {
 		fprintf(stderr, "SDL_Init: %s\n", SDL_GetError());
-		exit(-1);
-	}
-
-	// NOTE: initialize SDLNet
-	if(SDLNet_Init()==-1) {
-		fprintf(stderr, "SDLNet_Init: %s\n", SDLNet_GetError());
 		exit(-1);
 	}
 
@@ -93,82 +97,8 @@ void libInit(void) {
 		exit(-1);
 	}
 
-	// NOTE: start running the game
-	running = SDL_TRUE;
-}
-
-//-----------------------------------------------------------------------------
-void libQuit(void) {
-	// NOTE: release SDL_TTF
-	TTF_Quit();
-
-	// NOTE: release SDLNet
-	SDLNet_Quit();
-
-	// NOTE: release SDL2
-	SDL_Quit();
-}
-
-//-----------------------------------------------------------------------------
-void netInit(void) {
-	// NOTE: resolve the host IP struct
-	if(SDLNet_ResolveHost(&serverIp, "www.libgcw.com", 3490) == -1) {
-		fprintf(stderr, "SDLNet_ResolveHost: %s\n", SDLNet_GetError());
-
-		TTF_Quit();
-		SDLNet_Quit();
-		SDL_Quit();
-
-		exit(-1);
-	}
-
-	// NOTE: open UDP socket file descriptor
-	clientFD = SDLNet_UDP_Open(0);
-	if(!clientFD) {
-		fprintf(stderr, "SDLNet_UDP_Open: %s\n", SDLNet_GetError());
-
-		TTF_Quit();
-		SDLNet_Quit();
-		SDL_Quit();
-
-		exit(-1);
-	}
-
-	// NOTE: bind the server ip address to a channel on the client socket
-	serverChannel = SDLNet_UDP_Bind(clientFD, -1, &serverIp);
-	if(serverChannel==-1) {
-		fprintf(stderr, "SDLNet_UDP_Bind: %s\n", SDLNet_GetError());
-
-		SDLNet_UDP_Close(clientFD);
-
-		TTF_Quit();
-		SDLNet_Quit();
-		SDL_Quit();
-		
-		exit(-1);
-	}
-
-	// NOTE: setup the socketset
-	socketSet = SDLNet_AllocSocketSet(1);
-	SDLNet_UDP_AddSocket(socketSet, clientFD);
-}
-
-//-----------------------------------------------------------------------------
-void netQuit(void) {
-	// NOTE: free the socketset
-	SDLNet_FreeSocketSet(socketSet);
-
-	// NOTE: unbind all ips on the server channel
-	SDLNet_UDP_Unbind(clientFD, serverChannel);
-
-	// NOTE: close UDP socket
-	SDLNet_UDP_Close(clientFD);
-}
-
-//-----------------------------------------------------------------------------
-void gfxInit(void) {
 	// NOTE: initialize the GFX resources window
-	window = SDL_CreateWindow(
+	Game.window = SDL_CreateWindow(
 		SCREEN_NAME,
 		SDL_WINDOWPOS_CENTERED,
 		SDL_WINDOWPOS_CENTERED,
@@ -178,131 +108,227 @@ void gfxInit(void) {
 	);
 
 	// NOTE: initialize the GFX resources renderer
-	renderer = SDL_CreateRenderer(
-		window, -1,
+	Game.renderer = SDL_CreateRenderer(
+		Game.window, -1,
 		SDL_RENDERER_ACCELERATED|
 		SDL_RENDERER_PRESENTVSYNC
 	);
 
+	// NOTE: temporary renderer information struct
+	SDL_RendererInfo tempRenInfo;
+
 	// NOTE: if Vsync didn't work then exit
-	SDL_RendererInfo info;
-	SDL_GetRendererInfo(renderer, &info);
-	if(!(info.flags & SDL_RENDERER_PRESENTVSYNC)) {
+	SDL_GetRendererInfo(Game.renderer, &tempRenInfo);
+	if(!(tempRenInfo.flags & SDL_RENDERER_PRESENTVSYNC)) {
 		fprintf(stderr, "SDL_CreateRenderer: failed to set Vsync.\n");
-
-		netQuit();
-		libQuit();
-
 		exit(-1);
 	}
 
 	// NOTE: user screen for holding pixel data
-	screen = SDL_CreateRGBSurface(0, SCREEN_W, SCREEN_H, 24, 0x00, 0x00, 0x00, 0x00);
-	SDL_SetColorKey(screen, 1, 0xFF00FF);
-	SDL_FillRect(screen, 0, 0xFF00FF);
+	Game.gfx.screen = SDL_CreateRGBSurface(0, SCREEN_W, SCREEN_H, 32, 0x00, 0x00, 0x00, 0x00);
+
+	// NOTE: create a texture for our renderer
+	Game.gfx.texture = SDL_CreateTexture(
+		Game.renderer,
+		SDL_PIXELFORMAT_RGBA8888,
+		SDL_TEXTUREACCESS_STREAMING,
+		Game.gfx.screen->w,
+		Game.gfx.screen->h
+	);
 
 	// NOTE: init the game sprites and text font
-	font8 = TTF_OpenFont("SDS_8x8.ttf", 8);
-	SDL_Surface *surface = SDL_LoadBMP("spritesheet.bmp");
+	Game.gfx.font = TTF_OpenFont("SDS_8x8.ttf", 8);
+	SDL_Surface *tempSurface = SDL_LoadBMP("spritesheet.bmp");
 
+	// NOTE: set the sprites from the spritesheet
 	int i, x, y;
-	SDL_Rect rect = {0, 0, 8, 12};
+	SDL_Rect tempRect = {0, 0, SPRITE_W, SPRITE_H};
 	for(i=0; i<NUM_SPRITES; i++) {
-		spritesheet[i] = SDL_CreateRGBSurface(0, 8, 12, 24, 0x00, 0x00, 0x00, 0x00);
-		SDL_SetColorKey(spritesheet[i], 1, 0xFF00FF);
-		SDL_FillRect(spritesheet[i], 0, 0xFF00FF);
+		Game.gfx.sprites[i] = SDL_CreateRGBSurface(0, SPRITE_W, SPRITE_H, 24, 0x00, 0x00, 0x00, 0x00);
 		if(i!=0) {
-			x = (i-1)%(surface->w/8);
-			y = (i-x)/(surface->w/8);
-			rect.x = x*8, rect.y = y*12;
-			SDL_BlitSurface(surface, &rect, spritesheet[i], NULL);
+			x = (i-1)%(tempSurface->w/SPRITE_W);
+			y = (i-x)/(tempSurface->w/SPRITE_W);
+			tempRect.x = SPRITE_W*x, tempRect.y = SPRITE_H*y;
+			SDL_BlitSurface(tempSurface, &tempRect, Game.gfx.sprites[i], NULL);
 		}
 	}
 
-	SDL_FreeSurface(surface);
+	// NOTE: free the temporary surface
+	SDL_FreeSurface(tempSurface);
+	tempSurface = NULL;
+
+	// NOTE: initialize SDLNet
+	if(SDLNet_Init()==-1) {
+		fprintf(stderr, "SDLNet_Init: %s\n", SDLNet_GetError());
+		exit(-1);
+	}
+
+	/*
+	// NOTE: resolve the host IP struct
+	if(SDLNet_ResolveHost(&Game.net.server.ip, "www.libgcw.com", 3490) == -1) {
+		fprintf(stderr, "SDLNet_ResolveHost: %s\n", SDLNet_GetError());
+		exit(-1);
+	}
+
+	// NOTE: open UDP socket file descriptor
+	Game.net.socket = SDLNet_UDP_Open(0);
+	if(!Game.net.socket) {
+		fprintf(stderr, "SDLNet_UDP_Open: %s\n", SDLNet_GetError());
+		exit(-1);
+	}
+
+	// NOTE: bind the server ip address to a channel on the client socket
+	Game.net.server.channel = SDLNet_UDP_Bind(Game.net.socket, -1, &Game.net.server.ip);
+	if(Game.net.server.channel==-1) {
+		fprintf(stderr, "SDLNet_UDP_Bind: %s\n", SDLNet_GetError());
+		exit(-1);
+	}
+
+	// NOTE: setup the socketset
+	Game.net.set = SDLNet_AllocSocketSet(1);
+	SDLNet_UDP_AddSocket(Game.net.set, Game.net.socket);
+	*/
+
+	// NOTE: start running the game
+	Game.running = SDL_TRUE;
 }
 
 //-----------------------------------------------------------------------------
-void gfxQuit(void) {
-	// NOTE: free the GFX resources screen
-	SDL_FreeSurface(screen);
+void quitGame(void) {
+	/*
+	// NOTE: free the socketset
+	SDLNet_FreeSocketSet(Game.net.set);
 
-	// NOTE: free the GFX resources renderer
-	SDL_DestroyRenderer(renderer);
+	// NOTE: unbind all ips on the server channel
+	SDLNet_UDP_Unbind(Game.net.socket, Game.net.server.channel);
 
-	// NOTE: free the GFX resources window
-	SDL_DestroyWindow(window);
+	// NOTE: close UDP socket
+	SDLNet_UDP_Close(Game.net.socket);
+	*/
 
 	// NOTE: free the font resource and spritesheet
 	int i;
 	for(i=0; i<NUM_SPRITES; i++)
-		SDL_FreeSurface(spritesheet[i]);
-	TTF_CloseFont(font8);
+		SDL_FreeSurface(Game.gfx.sprites[i]);
+
+	// NOTE: free game font
+	TTF_CloseFont(Game.gfx.font);
+
+	// NOTE: destroy the game texture
+	SDL_DestroyTexture(Game.gfx.texture);
+
+	// NOTE: free the GFX resources screen
+	SDL_FreeSurface(Game.gfx.screen);
+
+	// NOTE: free the GFX resources renderer
+	SDL_DestroyRenderer(Game.renderer);
+
+	// NOTE: free the GFX resources window
+	SDL_DestroyWindow(Game.window);
+
+	// NOTE: release SDLNet
+	SDLNet_Quit();
+
+	// NOTE: release SDL_TTF
+	TTF_Quit();
+
+	// NOTE: release SDL2
+	SDL_Quit();
 }
 
 //-----------------------------------------------------------------------------
-SDL_Surface* buildSprite(int w, int h, int inds[]) {
+SDL_Surface* buildSprite(int w, int h, SDL_Color color, int inds[]) {
 	// NOTE: build a sprite surface to be drawn later
-	SDL_Surface *surface = SDL_CreateRGBSurface(0, 8*w, 12*h, 24, 0x00, 0x00, 0x00, 0x00);
+	SDL_Surface *spr = SDL_CreateRGBSurface(
+		0,
+		SPRITE_W*w,
+		SPRITE_H*h,
+		8, 0x00, 0x00, 0x00, 0x00
+	);
 
-	SDL_SetColorKey(surface, 1, 0xFF00FF);
-	SDL_FillRect(surface, 0, 0xFF00FF);
+	SDL_SetPaletteColors(spr->format->palette, &color, 1, 1);
+	SDL_SetColorKey(spr, SDL_TRUE, 0x00);
 
 	int i, j;
-	SDL_Rect rect = {0, 0, 8, 12};
+	SDL_Rect rect = {0, 0, SPRITE_W, SPRITE_H};
 	for(j=0; j<h; j++) {
 		for(i=0; i<w; i++) {
-			rect.x = i*8, rect.y = j*12;
-			SDL_BlitSurface(spritesheet[inds[w*j+i]], NULL, surface, &rect);
+			rect.x = SPRITE_W*i, rect.y = SPRITE_H*j;
+
+			// NOTE: get the pixel pointers
+			uint8_t *desPixels = (uint8_t *)spr->pixels;
+			uint8_t *srcPixels = (uint8_t *)Game.gfx.sprites[inds[w*j+i]]->pixels;
+
+			SDL_LockSurface(spr);
+
+			int m, k;
+			for(k=0; k<rect.h; k++) {
+				for(m=0; m<rect.w; m++) {
+					// NOTE: the blue value in the spritesheet is responsible
+					// for setting the pallette color
+					desPixels[(SPRITE_W*w)*(rect.y+k)+(rect.x+m)] = srcPixels[3*(rect.w*k+m)];
+				}
+			}
+
+			SDL_UnlockSurface(spr);
 		}
 	}
 
-	return surface;
+	return spr;
 }
 
 //-----------------------------------------------------------------------------
-void drawText(const char *str, SDL_Color color, int x, int y) {
+void drawText(int x, int y, SDL_Color color, const char *str) {
 	// NOTE: draw text to the screen
 	if(!str) return;
 
-	SDL_Surface *text = TTF_RenderText_Solid(font8, str, color);
+	SDL_Surface *text = TTF_RenderText_Solid(Game.gfx.font, str, color);
 
+	// NOTE: blit the text surface to the screen
 	SDL_Rect rect = {x, y, text->w, text->h};
-	SDL_BlitSurface(text, NULL, screen, &rect);
+	SDL_BlitSurface(text, NULL, Game.gfx.screen, &rect);
 
 	SDL_FreeSurface(text);
 }
 
 //-----------------------------------------------------------------------------
-void inputPoll(void) {
+void pollInput(void) {
 	// NOTE: poll for events and set the global state
 	SDL_Event event;
 	while(SDL_PollEvent(&event)) {
 		switch(event.type) {
+			// NOTE: set quit state
 			case SDL_QUIT: {
-				gameState = 0xFF;
+				Game.state = QUIT;
 			} break;
 			// NOTE: set key down state
 			case SDL_KEYDOWN: {
 				switch(event.key.keysym.sym) {
-					case SDLK_ESCAPE: gameState = 0xFF; break;
-					case SDLK_UP: upBnt = SDL_TRUE; break;
-					case SDLK_DOWN: downBnt = SDL_TRUE; break;
-					case SDLK_LEFT: leftBnt = SDL_TRUE; break;
-					case SDLK_RIGHT: rightBnt = SDL_TRUE; break;
-					case SDLK_LCTRL: aBnt = SDL_TRUE; break;
-					case SDLK_LALT: bBnt = SDL_TRUE; break;
+					case SDLK_ESCAPE: Game.state = QUIT; break;
+
+					// NOTE: input arrow keys
+					case SDLK_UP: Game.player.input.up_arw = SDL_TRUE; break;
+					case SDLK_DOWN: Game.player.input.down_arw = SDL_TRUE; break;
+					case SDLK_LEFT: Game.player.input.left_arw = SDL_TRUE; break;
+					case SDLK_RIGHT: Game.player.input.right_arw = SDL_TRUE; break;
+
+					// NOTE: input button keys
+					case SDLK_LALT: Game.player.input.b_bnt = SDL_TRUE; break;
+					case SDLK_LCTRL: Game.player.input.a_bnt = SDL_TRUE; break;
 				}
 			} break;
 			// NOTE: set key up state
 			case SDL_KEYUP: {
 				switch(event.key.keysym.sym) {
-					case SDLK_UP: upBnt = SDL_FALSE; break;
-					case SDLK_DOWN: downBnt = SDL_FALSE; break;
-					case SDLK_LEFT: leftBnt = SDL_FALSE; break;
-					case SDLK_RIGHT: rightBnt = SDL_FALSE; break;
-					case SDLK_LCTRL: aBnt = SDL_FALSE; break;
-					case SDLK_LALT: bBnt = SDL_FALSE; break;
+					// NOTE: input arrow keys
+					case SDLK_UP: Game.player.input.up_arw = SDL_FALSE; break;
+					case SDLK_DOWN: Game.player.input.down_arw = SDL_FALSE; break;
+					case SDLK_LEFT: Game.player.input.left_arw = SDL_FALSE; break;
+					case SDLK_RIGHT: Game.player.input.right_arw = SDL_FALSE; break;
+
+					// NOTE: input button keys
+					case SDLK_LALT: Game.player.input.b_bnt = SDL_FALSE; break;
+					case SDLK_LCTRL: Game.player.input.a_bnt = SDL_FALSE; break;
 				}
 			} break;
 		}
@@ -310,50 +336,40 @@ void inputPoll(void) {
 }
 
 //-----------------------------------------------------------------------------
-extern struct Player mainChr;
+void updateMoveState(MoveState *state) {
+	// NOTE: set the state coordinates
+	state->i = floor(state->x/(float) (SPRITE_W*2));
+	state->j = floor(state->y/(float) (SPRITE_H*3));
 
-void updateMoveState(struct Player *player) {
-	if(!player->moveState.canMove&&!player->moveState.moving) return;
-
-	player->moveState.i = floor(player->moveState.x/16.0f);
-	player->moveState.j = floor(player->moveState.y/24.0f);
-
-	if(player->moveState.moveFrame>0) player->moveState.moveFrame--;
-	else if(player->moveState.moving) {
-		player->moveState.moving = SDL_FALSE;
+	// NOTE: update the movement frame
+	if(state->moveframe>0) state->moveframe--;
+	else if(state->moving) {
+		state->moving = SDL_FALSE;
 	}
 
-	if(player->moveState.moving) {
-		switch(player->moveState.moveDirec) {
-			case 0: player->moveState.y--; break;
-			case 1: player->moveState.y++; break;
-			case 2: player->moveState.x--; break;
-			case 3: player->moveState.x++; break;
+	// NOTE: move the state forward in the right direction
+	if(state->moving) {
+		switch(state->movedirec) {
+			case 0: state->y--; break;
+			case 1: state->y++; break;
+			case 2: state->x--; break;
+			case 3: state->x++; break;
 		}
-	}
-
-	if(player->id==mainChr.id) {
-		memcpy(&mainChr.moveState, &player->moveState, sizeof(struct moveState));
 	}
 }
 
 //-----------------------------------------------------------------------------
-void clearInput(void) {
-	// NOTE: clear all the check state
-	aChk = SDL_FALSE;
-	bChk = SDL_FALSE;
-	upChk = SDL_FALSE;
-	downChk = SDL_FALSE;
-	leftChk = SDL_FALSE;
-	rightChk = SDL_FALSE;
-
-	// NOTE: clear all the button state
-	aBnt = SDL_FALSE;
-	bBnt = SDL_FALSE;
-	upBnt = SDL_FALSE;
-	downBnt = SDL_FALSE;
-	leftBnt = SDL_FALSE;
-	rightBnt = SDL_FALSE;
+/*
+void clearInput(Input *input) {
+	memset(input, 0x00, sizeof(Input));
 }
+*/
+
+//-----------------------------------------------------------------------------
+/*
+void changeColor(SDL_Surface *spr, SDL_Color color) {
+	SDL_SetPaletteColors(spr->format->palette, &color, 1, 1);
+}
+*/
 
 #endif
