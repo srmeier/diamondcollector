@@ -12,41 +12,6 @@ gcc main.c -o client.exe -I./include -L./lib -lmingw32 -lSDL2main -lSDL2 -lSDL2_
 #include <SDL2/SDL_ttf.h>
 #include <SDL2/SDL_net.h>
 
-//-----------------------------------------------------------------------------
-#define SCREEN_W 480 // 60 -> 30
-#define SCREEN_H 360 // 30 -> 15
-#define NUM_SPRITES 1025
-#define SCREEN_NAME "Prototype"
-#define SCREEN_SCALE 2
-
-/* NOTE: engine variables */
-//-----------------------------------------------------------------------------
-SDL_bool aChk;
-SDL_bool bChk;
-SDL_bool upChk;
-SDL_bool downChk;
-SDL_bool leftChk;
-SDL_bool rightChk;
-
-SDL_bool aBnt;
-SDL_bool bBnt;
-SDL_bool upBnt;
-SDL_bool downBnt;
-SDL_bool leftBnt;
-SDL_bool rightBnt;
-
-int gameState;
-TTF_Font *font8;
-SDL_bool running;
-int serverChannel;
-IPaddress serverIp;
-UDPsocket clientFD;
-SDL_Window *window;
-SDL_Surface *screen;
-SDL_Renderer *renderer;
-SDLNet_SocketSet socketSet;
-SDL_Surface *spritesheet[NUM_SPRITES];
-
 /* NOTE: engine includes */
 //-----------------------------------------------------------------------------
 #include "types.h"

@@ -2,6 +2,78 @@
 #define __ENGINE_H_
 
 //-----------------------------------------------------------------------------
+#define SPRITE_w 8
+#define SPRITE_H 8
+#define SCREEN_W 480
+#define SCREEN_H 360
+#define NUM_SPRITES 960
+#define SCREEN_NAME "Prototype"
+#define SCREEN_SCALE 1
+
+//-----------------------------------------------------------------------------
+typedef enum {
+	INITIALIZE,
+	MAIN_LOOP,
+	QUIT = 0xFF
+} GAME_STATE;
+
+struct {
+	SDL_bool running;
+	GAME_STATE state;
+	SDL_Window *window;
+	SDL_Renderer *renderer;
+	struct {
+		TTF_Font *font;
+		SDL_Surface *screen;
+		SDL_Texture *texture;
+		SDL_Surface *sprites[NUM_SPRITES];
+	} gfx;
+} Game = {};
+
+typedef struct {
+	SDL_bool a_chk;
+	SDL_bool a_bnt;
+	SDL_bool b_chk;
+	SDL_bool b_bnt;
+	SDL_bool up_chk;
+	SDL_bool up_arw;
+	SDL_bool down_chk;
+	SDL_bool down_arw;
+	SDL_bool left_chk;
+	SDL_bool left_arw;
+	SDL_bool right_chk;
+	SDL_bool right_arw;
+} Input;
+
+/* NOTE: engine variables */
+//-----------------------------------------------------------------------------
+SDL_bool aChk;
+SDL_bool bChk;
+SDL_bool upChk;
+SDL_bool downChk;
+SDL_bool leftChk;
+SDL_bool rightChk;
+
+SDL_bool aBnt;
+SDL_bool bBnt;
+SDL_bool upBnt;
+SDL_bool downBnt;
+SDL_bool leftBnt;
+SDL_bool rightBnt;
+
+int gameState;
+TTF_Font *font8;
+SDL_bool running;
+int serverChannel;
+IPaddress serverIp;
+UDPsocket clientFD;
+SDL_Window *window;
+SDL_Surface *screen;
+SDL_Renderer *renderer;
+SDLNet_SocketSet socketSet;
+SDL_Surface *spritesheet[NUM_SPRITES];
+
+//-----------------------------------------------------------------------------
 void libInit(void) {
 	// NOTE: initialize SDL2
 	if(SDL_Init(SDL_INIT_EVERYTHING)!=0) {
