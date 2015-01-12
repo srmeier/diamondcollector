@@ -47,7 +47,7 @@ int SDL_main(int argc, char *argv[]) {
 
 				// NOTE: create player sprite
 				int playerSpriteInds[2*3] = {
-					01, 02,
+					 1,  2,
 					33, 34,
 					65, 66
 				};
@@ -64,6 +64,12 @@ int SDL_main(int argc, char *argv[]) {
 
 				SDL_Color playerShadowColor = {0x00,0x00,0x00,0xFF};
 				Game.player.shadow = buildSprite(2, 3, playerShadowColor, playerShadowInds);
+
+				// NOTE: set the player information
+				Game.player.mana = 100;
+				Game.player.health = 100;
+				Game.player.totMana = 100;
+				Game.player.totHealth = 100;
 
 				// NOTE: set the player's position
 				Game.player.moveState.x = SPRITE_W*2*6;

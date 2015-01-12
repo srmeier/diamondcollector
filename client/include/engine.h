@@ -2,6 +2,20 @@
 #define __ENGINE_H_
 
 //-----------------------------------------------------------------------------
+/*
+void clearInput(Input *input) {
+	memset(input, 0x00, sizeof(Input));
+}
+*/
+
+//-----------------------------------------------------------------------------
+/*
+void changeColor(SDL_Surface *spr, SDL_Color color) {
+	SDL_SetPaletteColors(spr->format->palette, &color, 1, 1);
+}
+*/
+
+//-----------------------------------------------------------------------------
 #define SPRITE_W 8
 #define SPRITE_H 8
 #define SCREEN_W 480
@@ -62,6 +76,10 @@ struct {
 	SDL_Window *window;
 	SDL_Renderer *renderer;
 	struct {
+		int mana;
+		int health;
+		int totMana;
+		int totHealth;
 		Input input;
 		MoveState moveState;
 		SDL_Surface *sprite;
@@ -357,19 +375,5 @@ void updateMoveState(MoveState *state) {
 		}
 	}
 }
-
-//-----------------------------------------------------------------------------
-/*
-void clearInput(Input *input) {
-	memset(input, 0x00, sizeof(Input));
-}
-*/
-
-//-----------------------------------------------------------------------------
-/*
-void changeColor(SDL_Surface *spr, SDL_Color color) {
-	SDL_SetPaletteColors(spr->format->palette, &color, 1, 1);
-}
-*/
 
 #endif
