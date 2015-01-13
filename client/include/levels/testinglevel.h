@@ -6,6 +6,7 @@ class TestingLevel: public Level {
 private:
 	SDL_Surface *wallSprite00;
 	SDL_Surface *wallSprite01;
+	SDL_Surface *wallSprite02;
 	SDL_Surface *doorSprite00;
 	SDL_Surface *doorSprite01;
 	SDL_Surface *floorSprite00;
@@ -28,6 +29,7 @@ private:
 		{0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x02,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01}
 	};
 
+	int numOfHits;
 	int displayAttackI;
 	int displayAttackJ;
 	int displayAttackFrame;
@@ -90,7 +92,7 @@ TestingLevel::TestingLevel(void) {
 	int wallSprite01Inds[2*3] = {
 		 97,  98,
 		129, 130,
-		161, 162,
+		161, 162
 	};
 
 	SDL_Color wall01Color = {0xFF,0xFF,0xFF,0xFF};
@@ -99,7 +101,7 @@ TestingLevel::TestingLevel(void) {
 	int attackSprite00Inds[2*3] = {
 		 99, 100,
 		131, 132,
-		163, 164,
+		163, 164
 	};
 
 	SDL_Color attackSprite00Color = {0x77,0x11,0x11,0xFF};
@@ -108,7 +110,7 @@ TestingLevel::TestingLevel(void) {
 	int attackSprite01Inds[2*3] = {
 		101, 102,
 		133, 134,
-		165, 166,
+		165, 166
 	};
 
 	SDL_Color attackSprite01Color = {0x77,0x11,0x11,0xFF};
@@ -116,12 +118,21 @@ TestingLevel::TestingLevel(void) {
 
 	int attackSprite02Inds[2*3] = {
 		103, 104,
-		133, 134,
-		165, 166,
+		135, 136,
+		167, 168
 	};
 
 	SDL_Color attackSprite02Color = {0x77,0x11,0x11,0xFF};
 	attackSprite02 = buildSprite(2, 3, attackSprite02Color, attackSprite02Inds);
+
+	int wallSprite02Inds[2*3] = {
+		105, 106,
+		137, 138,
+		169, 170
+	};
+
+	SDL_Color wallSprite02Color = {0xFF,0xFF,0xFF,0xFF};
+	wallSprite02 = buildSprite(2, 3, wallSprite02Color, wallSprite02Inds);
 }
 
 TestingLevel::~TestingLevel(void) {
@@ -151,6 +162,9 @@ TestingLevel::~TestingLevel(void) {
 
 	SDL_FreeSurface(attackSprite02);
 	attackSprite02 = NULL;
+
+	SDL_FreeSurface(wallSprite02);
+	wallSprite02 = NULL;
 }
 
 void TestingLevel::update(void) {
@@ -159,7 +173,10 @@ void TestingLevel::update(void) {
 	int i = Game.player.moveState.i;
 	int j = Game.player.moveState.j-3;
 
-	if(displayAttackFrame>0) displayAttackFrame--;
+	if(displayAttackFrame>-12) displayAttackFrame--;
+	else if(displayAttack00) {
+		displayAttack00 = SDL_FALSE;
+	}
 
 	if(!Game.player.moveState.moving) {
 		// NOTE: player movement up
@@ -170,12 +187,17 @@ void TestingLevel::update(void) {
 			Game.player.moveState.moveframe = SPRITE_H*3;
 			Game.player.moveState.movedirec = 0;
 
-		} else if((Game.player.input.up_arw&&!Game.player.input.up_chk) && tiles[j-1][i]==0x03) {
+		} else if((Game.player.input.up_arw&&!Game.player.input.up_chk) && tiles[j-1][i]==0x03 && !displayAttack00) {
 
 			displayAttackI = i;
 			displayAttackJ = j-1 + 3;
 			displayAttack00 = SDL_TRUE;
-			displayAttackFrame = 32;
+			displayAttackFrame = 12;
+
+			numOfHits++;
+			if(numOfHits>2) {
+				tiles[displayAttackJ-3][displayAttackI] = 0x04;
+			}
 
 		} else if(!Game.player.input.up_arw) {
 			Game.player.input.up_chk = SDL_FALSE;
@@ -189,6 +211,18 @@ void TestingLevel::update(void) {
 			Game.player.moveState.moveframe = SPRITE_H*3;
 			Game.player.moveState.movedirec = 1;
 
+		} else if((Game.player.input.down_arw&&!Game.player.input.down_chk) && tiles[j+1][i]==0x03 && !displayAttack00) {
+
+			displayAttackI = i;
+			displayAttackJ = j+1 + 3;
+			displayAttack00 = SDL_TRUE;
+			displayAttackFrame = 12;
+
+			numOfHits++;
+			if(numOfHits>2) {
+				tiles[displayAttackJ-3][displayAttackI] = 0x04;
+			}
+
 		} else if(!Game.player.input.down_arw) {
 			Game.player.input.down_chk = SDL_FALSE;
 		}
@@ -201,6 +235,18 @@ void TestingLevel::update(void) {
 			Game.player.moveState.moveframe = SPRITE_W*2;
 			Game.player.moveState.movedirec = 2;
 
+		} else if((Game.player.input.left_arw&&!Game.player.input.left_chk) && tiles[j][i-1]==0x03 && !displayAttack00) {
+
+			displayAttackI = i-1;
+			displayAttackJ = j + 3;
+			displayAttack00 = SDL_TRUE;
+			displayAttackFrame = 12;
+
+			numOfHits++;
+			if(numOfHits>2) {
+				tiles[displayAttackJ-3][displayAttackI] = 0x04;
+			}
+
 		} else if(!Game.player.input.left_arw) {
 			Game.player.input.left_chk = SDL_FALSE;
 		}
@@ -212,6 +258,18 @@ void TestingLevel::update(void) {
 			Game.player.moveState.moving = SDL_TRUE;
 			Game.player.moveState.moveframe = SPRITE_W*2;
 			Game.player.moveState.movedirec = 3;
+
+		} else if((Game.player.input.right_arw&&!Game.player.input.right_chk) && tiles[j][i+1]==0x03 && !displayAttack00) {
+
+			displayAttackI = i+1;
+			displayAttackJ = j + 3;
+			displayAttack00 = SDL_TRUE;
+			displayAttackFrame = 12;
+
+			numOfHits++;
+			if(numOfHits>2) {
+				tiles[displayAttackJ-3][displayAttackI] = 0x04;
+			}
 
 		} else if(!Game.player.input.right_arw) {
 			Game.player.input.right_chk = SDL_FALSE;
@@ -242,6 +300,9 @@ void TestingLevel::render(void) {
 				case 0x03: {
 					SDL_BlitSurface(wallSprite01, NULL, Game.gfx.screen, &tempRect);
 				} break;
+				case 0x04: {
+					SDL_BlitSurface(wallSprite02, NULL, Game.gfx.screen, &tempRect);
+				} break;
 				default: {
 					SDL_BlitSurface(floorSprite00, NULL, Game.gfx.screen, &tempRect);
 				} break;
@@ -267,7 +328,12 @@ void TestingLevel::render(void) {
 		tempRect.x = SPRITE_W*2*displayAttackI;
 		tempRect.y = SPRITE_H*3*displayAttackJ;
 
-		SDL_BlitSurface(attackSprite00, NULL, Game.gfx.screen, &tempRect);
+		if(displayAttackFrame>8)
+			SDL_BlitSurface(attackSprite00, NULL, Game.gfx.screen, &tempRect);
+		else if(displayAttackFrame>4)
+			SDL_BlitSurface(attackSprite01, NULL, Game.gfx.screen, &tempRect);
+		else if(displayAttackFrame>0)
+			SDL_BlitSurface(attackSprite02, NULL, Game.gfx.screen, &tempRect);
 	}
 }
 
