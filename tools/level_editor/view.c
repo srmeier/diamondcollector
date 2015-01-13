@@ -11,7 +11,7 @@ gcc view.c -o view.exe -I./include -L./lib -lmingw32 -lSDL2main -lSDL2 -lSDL2_tt
 #include "sqlite3.h"
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_ttf.h>
-#include "view.h"
+#include "engine.h"
 
 //-----------------------------------------------------------------------------
 typedef struct {
@@ -28,6 +28,8 @@ int loadTilesCB(void *data, int argc, char *argv[], char *name[]);
 
 //-----------------------------------------------------------------------------
 int SDL_main(int argc, char *argv[]) {
+	freopen("log.txt", "w", stderr);
+
 	// NOTE: check for the correct number of arguements
 	if(argc<2) {
 		fprintf(stderr, "Error: need a level name.\n");
@@ -39,7 +41,7 @@ int SDL_main(int argc, char *argv[]) {
 	sprintf(filename, "levels/%s.db", argv[1]);
 
 	// NOTE: open database connection
-	if(sqlite3_open(filename, &db)) {
+	if(sqlite3_open_v2(filename, &db, SQLITE_OPEN_READONLY, NULL)) {
 		fprintf(stderr, "sqlite3_open: %s\n", sqlite3_errmsg(db));
 		sqlite3_close(db);
 		return -1;
@@ -198,6 +200,7 @@ int SDL_main(int argc, char *argv[]) {
 	sqlite3_close(db);
 	db = NULL;
 
+	fclose(stderr);
 	return 0;
 }
 

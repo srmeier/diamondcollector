@@ -1,0 +1,38 @@
+level (database)
+/*
+- to read in data for a particular level the program runs SELECT * FROM tiles;,
+	then a 2D array is created using the tile_id as the linear index and
+	sprite_id as an index into the sprites array (which will be created after),
+	then another array is created using tile_id as the linear index and
+	action_id as an index into the array of function pointers which the game
+	has compiled already. Finally, the game looks through the array of
+	sprite_id-s and runs SELECT * FROM sprites WHERE sprite_id = %d; then from
+	each entry a SDL_Surface* is created and the sprite is built
+*/
+	tiles
+	/*
+	- tile_id is an index into a linear array of length 30*12, making up each
+		tile on the screen below the top-screen GUI
+	*/
+	- tile_id (INTEGER)
+	- layer (INTEGER)
+	- sprite_id (INTEGER)
+	- action_id (INTEGER)
+	
+	sprites
+	/*
+	- sprite_is is an index into a linear array of length sheet->w*sheet->h
+	- index is a linear array (4 bytes) of length 2*3 into the spritesheet (6)
+	- color is a single number (3 bytes) for the RGB color of the sprite
+	*/
+	- sprite_id (INTEGER)
+	- name (TEXT)
+	- color (BLOB)
+	- index (BLOB)
+	
+	actions
+	/*
+	- the action_id is an index into an array of action function pointers
+	*/
+	- action_id (INTEGER)
+	- name (TEXT)
