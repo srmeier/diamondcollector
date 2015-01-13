@@ -17,6 +17,11 @@ g++ main.cpp -std=c++11 -o client.exe -I./include -L./lib -lmingw32 -lSDL2main -
 #include "levels/testinglevel.h"
 #include "userinterface/topscreengui.h"
 
+/*
+- b/a+arrow key = continuously move in that direction
+- add the defense "meter"
+*/
+
 //-----------------------------------------------------------------------------
 int SDL_main(int argc, char *argv[]) {
 
