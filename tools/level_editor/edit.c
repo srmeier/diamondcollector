@@ -1,5 +1,5 @@
 /*
-gcc level_editor.c -o level_editor.exe -I./include -L./lib -lmingw32 -lSDL2main -lSDL2 -lSDL2_ttf -lsqlite3
+gcc edit.c -o edit.exe -I./include -L./lib -lmingw32 -lSDL2main -lSDL2 -lSDL2_ttf -lsqlite3
 */
 
 //-----------------------------------------------------------------------------

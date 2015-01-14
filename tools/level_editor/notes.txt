@@ -1,3 +1,15 @@
+IDEAS:
+- metasprites are structured seperate from levels?
+	- yes, otherwise I'll be structuring metasprites for each level
+- levels set the color pallette for a metasprite
+- should I have a program which creates a "mapping" file which the game uses
+	for creating metasprites?
+	- how would this program work?
+	- perhaps a window which is capable of holding the maximum sized metasprite
+		from there I can move from piece to piece with the arrow keys. when I
+		want to modify a single piece sprite I hold the shift key and use the
+		arrow keys to pick a sprite piece (defualt color being white/black)
+
 level (database)
 /*
 - to read in data for a particular level the program runs SELECT * FROM tiles;,
