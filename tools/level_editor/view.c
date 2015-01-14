@@ -1,6 +1,5 @@
 /*
-gcc view.c -o view.exe -I./include -L./lib -lmingw32 -lSDL2main -lSDL2 -lSDL2_ttf -mwindows -lsqlite3
-- view the layout for a particular level
+gcc level_editor.c -o level_editor.exe -I./include -L./lib -lmingw32 -lSDL2main -lSDL2 -lSDL2_ttf -lsqlite3
 */
 
 //-----------------------------------------------------------------------------
@@ -28,8 +27,6 @@ int loadTilesCB(void *data, int argc, char *argv[], char *name[]);
 
 //-----------------------------------------------------------------------------
 int SDL_main(int argc, char *argv[]) {
-	freopen("log.txt", "w", stderr);
-
 	// NOTE: check for the correct number of arguements
 	if(argc<2) {
 		fprintf(stderr, "Error: need a level name.\n");
